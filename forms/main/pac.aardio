@@ -4,6 +4,11 @@ import fonts.fontAwesome;
 /*DSG{{*/
 var winform = win.form(text="winXray - 代理自动配置文件(PAC)";right=912;bottom=802;bgcolor=16777215)
 winform.add(
+editAllProxy={cls="richedit";left=8;top=97;right=901;bottom=745;db=1;dl=1;dr=1;dt=1;edge=1;font=LOGFONT(h=-15);hidesel=false;hscroll=1;multiline=1;readonly=1;vscroll=1;z=18};
+editAllDirect={cls="richedit";left=8;top=97;right=901;bottom=745;db=1;dl=1;dr=1;dt=1;edge=1;font=LOGFONT(h=-15);hidesel=false;hscroll=1;multiline=1;readonly=1;vscroll=1;z=19};
+navAllProxy={cls="plus";text="代理(JSON)";left=9;top=750;right=105;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=20};
+navAllDirect={cls="plus";text="直连(JSON)";left=105;top=750;right=201;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=21};
+
 btnAddDomain={cls="plus";text="添加";left=625;top=25;right=723;bottom=56;align="left";bgcolor=14935259;dr=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-13;name='FontAwesome');padding={left=22}};iconText='\uF1C4';notify=1;textPadding={left=40};z=16};
 btnDeleteDomain={cls="plus";text="移除";left=740;top=25;right=838;bottom=56;align="left";bgcolor=14935259;dr=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-13;name='FontAwesome');padding={left=22}};iconText='\uF1C4';notify=1;textPadding={left=40};z=17};
 btnReset={cls="plus";text="恢复PAC";left=609;top=763;right=741;bottom=794;align="left";bgcolor=14935259;db=1;dr=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-13;name='FontAwesome');padding={left=22}};iconText='\uF0E2';notify=1;textPadding={left=40};z=9};
@@ -14,10 +19,10 @@ editPacDomain={cls="plus";left=91;top=29;right=436;bottom=53;align="right";bgcol
 editPacProxy={cls="richedit";left=8;top=97;right=901;bottom=751;db=1;dl=1;dr=1;dt=1;edge=1;font=LOGFONT(h=-15);hidesel=false;hscroll=1;multiline=1;vscroll=1;z=3};
 groupbox={cls="groupbox";text="域名项";left=8;top=8;right=901;bottom=64;bgcolor=16777215;dl=1;dr=1;dt=1;edge=1;z=1};
 lbTip={cls="plus";text="以下域名通过代理连接（ 点域名绑定上面选项，点击右键菜单可批量导入域名 ）。";left=10;top=66;right=898;bottom=92;align="left";color=3947580;dl=1;dr=1;dt=1;font=LOGFONT(h=-13);notify=1;transparent=1;z=13};
-navDirect={cls="plus";text="直连域名( JSON )";left=184;top=750;right=315;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=8};
-navProxy={cls="plus";text="代理域名( JSON )";left=53;top=750;right=184;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=5};
-navRight={cls="plus";left=314;top=750;right=604;bottom=751;bgcolor=16777215;border={color=-16744448};db=1;dl=1;dr=1;forecolor=32768;linearGradient=180;z=11};
-plus={cls="plus";left=9;top=750;right=53;bottom=751;border={color=-16744448};db=1;dl=1;forecolor=32768;z=14};
+navDirect={cls="plus";text="自定直连";left=297;top=750;right=393;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=8};
+navProxy={cls="plus";text="自定代理";left=201;top=750;right=297;bottom=782;border={top=1;color=-16744448};db=1;dl=1;z=5};
+navRight={cls="plus";left=393;top=750;right=402;bottom=751;bgcolor=16777215;border={color=-16744448};db=1;dl=1;dr=1;forecolor=32768;linearGradient=180;z=11};
+plus={cls="plus";left=8;top=750;right=9;bottom=751;border={color=-16744448};db=1;dl=1;forecolor=32768;z=14};
 plus2={cls="plus";text="域名:";left=16;top=28;right=79;bottom=54;align="right";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);notify=1;transparent=1;z=15};
 radioDirect={cls="plus";text="直连";left=540;top=27;right=611;bottom=58;align="left";dr=1;dt=1;font=LOGFONT(h=-16);iconStyle={align="left";font=LOGFONT(h=-15;name='FontAwesome')};iconText='\uF111';notify=1;textPadding={left=15};z=6};
 radioProxy={cls="plus";text="代理";left=460;top=27;right=529;bottom=58;align="left";dr=1;dt=1;font=LOGFONT(h=-16);iconStyle={align="left";font=LOGFONT(h=-15;name='FontAwesome')};iconText='\uF111';notify=1;textPadding={left=15};z=4}
@@ -38,7 +43,7 @@ winform.radioProxy.checked = true;
 import config;
 import web.json;
 import win.ui.tabs;
-var tbs = win.ui.tabs(winform.navProxy,winform.navDirect,winform.nav06,winform.nav091,winform.navZhengMa,winform.navTxt)
+var tbs = win.ui.tabs(winform.navAllProxy,winform.navAllDirect,winform.navProxy,winform.navDirect)
 tbs.margin = 0;
 
 tbs.skin({
@@ -58,96 +63,81 @@ tbs.skin({
 });
 
 tbs.onSelchange = function(idx,strip,form){
-	if(idx==1){
-		winform.currentEditPac = winform.editPacProxy;
-		winform.editPacProxy.hide = false;
-		winform.editPacDirect.hide = true;
-		winform.lbTip.text = `以下域名通过代理连接（ 点域名绑定上面选项，点击右键菜单可批量导入代理域名 ）：`
-	}
-	else {
-		winform.currentEditPac = winform.editPacDirect;
-		winform.editPacProxy.hide = true;
-		winform.editPacDirect.hide = false;
-		winform.lbTip.text = `以下域名不使用代理（ 点域名绑定上面选项，点击右键菜单可批量导入直连域名 ）： `
-	}	
+    winform.editAllProxy.hide = idx != 1;
+    winform.editAllDirect.hide = idx != 2;
+    winform.editPacProxy.hide = idx != 3;
+    winform.editPacDirect.hide = idx != 4;
+    var editors = {winform.editAllProxy;winform.editAllDirect;winform.editPacProxy;winform.editPacDirect};
+    winform.currentEditPac = editors[idx];
+    // Adding from the full list still creates a persistent local override.
+    winform.btnDeleteDomain.disabled = idx <= 2;
+    if(idx <= 2){
+        winform.lbTip.text = "完整 PAC 规则（只读）；添加域名会保存为自定义规则，自定页可编辑或移除。";
+    }
+    else {
+        winform.lbTip.text = "本地自定义规则优先生效，网络同步不会覆盖；右键可批量导入域名或 IP 段。";
+    }
+    winform.radioProxy.checked = idx == 1 || idx == 3;
+    winform.radioDirect.checked = idx == 2 || idx == 4;
 }
 tbs.selIndex = 1;
 
 import win.dlg.message;
 win.dlg.message.install();
 
-winform.loadPacToEdit = function(str,fromUpdater){
-	var rules = string.match(str,"var\s+rules\s*=\s*(%\[\])")
-	if(!rules) return winform.msgErr("PAC文件格式错误");
-
-	rules = web.json.parse(rules);
-	if(!(rules && table.isArray(rules) && type(rules[1][1])==type.table)) return winform.msgErr("PAC文件格式错误");
-
-	var proxy,direct = table.array(),table.array() 
-	for(i=1;#rules){
-		table.append(direct,rules[i][1]);
-		table.append(proxy,rules[i][2]);
-	}
-	
-	if(fromUpdater && !..table.find(proxy,"91.108.56.0/22") ){
-		// https://ipinfo.io/AS44907 https://ipinfo.io/AS59930 https://ipinfo.io/AS62041
-		table.push(proxy,
-			"149.154.160.0/22", 
-            "149.154.164.0/22",
-            "149.154.172.0/22", 
-            "91.108.4.0/22",
-            "91.108.20.0/22",
-            "91.108.56.0/22",
-            "91.108.8.0/22",
-            "95.161.64.0/20",
-            "91.108.12.0/22"
-		)
-	}
-
-	winform.editPacProxy.text = web.json.stringify(proxy,true)
-	winform.editPacDirect.text = web.json.stringify(direct,true)
+import v2ray.pacServer;
+winform.refreshAllRules = function(){
+    var localRules = v2ray.pacServer.loadLocalRules();
+    var groups = {localRules};
+    table.append(groups,v2ray.pacServer.loadNetworkRules());
+    var direct,proxy = table.array(),table.array();
+    for(i,group in groups){
+        for(j,rule in group[1]){
+            if(!table.indexOf(direct,rule)) table.push(direct,rule);
+        }
+        for(j,rule in group[2]){
+            if(!table.indexOf(proxy,rule)) table.push(proxy,rule);
+        }
+    }
+    // Hide network entries overridden by a local rule with the opposite action.
+    direct = table.filter(direct,lambda(rule) !table.indexOf(localRules[2],rule));
+    proxy = table.filter(proxy,lambda(rule) !table.indexOf(localRules[1],rule));
+    winform.editAllDirect.text = web.json.stringify(direct,true);
+    winform.editAllProxy.text = web.json.stringify(proxy,true);
 }
 
+winform.loadPacToEdit = function(str,fromUpdater){
+    if(fromUpdater){
+        if(!v2ray.pacServer.saveNetworkPac(str)){
+            winform.msgErr("网络 PAC 格式错误或保存失败，本地规则已保留");
+            return false;
+        }
+        winform.refreshAllRules();
+        return true;
+    }
+    winform.refreshAllRules();
+    var localRules = v2ray.pacServer.loadLocalRules();
+    winform.editPacDirect.text = web.json.stringify(localRules[1],true);
+    winform.editPacProxy.text = web.json.stringify(localRules[2],true);
+    return true;
+}
 
 winform.btnUpdate.oncommand = function(id,event){
+	if(!winform.savePacToFile(true)) return;
+	winform.btnSave.disabled = true;
+	winform.btnReset.disabled = true;
 	winform.btnUpdate.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
 	
 	thread.invoke( 
 		function(winform){ 
-			import web.rest.github; 
+			import web.rest.github;
+			import sysProxy;
 			var result = web.rest.github.getContent("petronny","gfwlist2pac","gfwlist.pac");
 			if( result ){
-				var jsTestHost = /***
-function testHost(host, index) {
-    if( /^\d+\.\d+\.\d+\.\d+$/.test(host) && ( typeof isInNetEx !== "undefined" ) ){
-        for (var i = 0; i < rules[index].length; i++) {
-            for (var j = 0; j < rules[index][i].length; j++) {
-                lastRule = rules[index][i][j];
-                if(host == lastRule || host.endsWith('.' + lastRule) || ( lastRule.indexOf("/") && isInNetEx(host, lastRule) ) ){
-                    return i % 2 == 0 ? 'DIRECT' : proxy; 
-                }
-            }
-        }
-        return;       
-    }
-
-    for (var i = 0; i < rules[index].length; i++) {
-        for (var j = 0; j < rules[index][i].length; j++) {
-            lastRule = rules[index][i][j];
-            if (host == lastRule || host.endsWith('.' + lastRule))
-                return i % 2 == 0 ? 'DIRECT' : proxy; 
-        }
-    }
-    lastRule = '';
-}
-***/
-				var result = string.replace(result,"function\s*testHost\s*%\(\)\s*%\{\}",jsTestHost);
-				
-				winform.loadPacToEdit( result,true );
-				winform.editPacDirect.modified = true;
-				winform.btnSave.disabled = false;
-				winform.btnReset.disabled = false;
-				winform.msgOk("PAC 已同步到最新版本，请点击「保存 PAC」按钮");
+				if(winform.loadPacToEdit(result,true)){
+					sysProxy.reset(true);
+					winform.msgOk("网络 PAC 已更新并保存，本地自定义规则已保留");
+				}
 			}	
 			else {
 				winform.msgFrown("PAC 更新失败，建议开启全局代理后重试。")
@@ -160,28 +150,30 @@ function testHost(host, index) {
 import sysProxy;
 import string.conv;
 import v2ray.pacServer;
-winform.savePacToFile = function(){
+winform.savePacToFile = function(silent){
 	var proxy =  web.json.tryParse(string.conv.fromWide(winform.editPacProxy.text))
 	var direct =  web.json.tryParse(string.conv.fromWide(winform.editPacDirect.text))
 	if(!(table.isArray(proxy))) {
 		winform.btnSave.disabledText = null;
-		return winform.msgErr("代理域名配置格式错误");
+		winform.msgErr("代理域名配置格式错误"); return false;
 	}
 	if(!(table.isArray(direct))) {
 		winform.btnSave.disabledText = null;
-		return winform.msgErr("直连域名配置格式错误");
+		winform.msgErr("直连域名配置格式错误"); return false;
 	}
 		
-	v2ray.pacServer.savePacText(web.json.stringify({{direct;proxy}},true));
+	if(!v2ray.pacServer.savePacText(web.json.stringify({{direct;proxy}},true))){ winform.btnSave.disabledText = null; winform.msgErr("本地 PAC 规则保存失败"); return false; }
 	
+	winform.refreshAllRules();
 	winform.editPacDirect.modified = false;
 	winform.editPacProxy.modified = false;
 	sysProxy.reset(true);
 	
-	winform.msgOk("已保存 PAC 文件",1200);
+	if(!silent) winform.msgOk("已保存本地规则并应用 PAC",1200);
 	winform.btnSave.disabledText = null;
 	winform.btnSave.disabled = true;
 	winform.btnReset.disabled = true;
+	return true;
 }
 
 winform.btnSave.oncommand = function(id,event){
@@ -207,7 +199,7 @@ winform.btnReset.oncommand = function(id,event){
 			winform.btnReset.disabledText = null;
 			winform.btnSave.disabled = true;
 			winform.btnReset.disabled = true;
-			winform.msgOk("已恢复到当前 PAC 配置")
+			winform.editPacDirect.modified = false; winform.editPacProxy.modified = false; winform.msgOk("已恢复到已保存的本地规则")
 		},winform
 	)
 }
@@ -281,11 +273,11 @@ findDlgDirect.onSearch = function(findWhat,down,matchCase,wholeWord){
 }
 
 findDlgDirect.onReplace = function(findWhat,replaceWith,down,matchCase,wholeWord){
-	winform.currentEditPac.replaceText(findWhat,replaceWith,findDlgDirect.flags);		
+	if(tbs.selIndex <= 2) return winform.msgWarn("请在自定代理或自定直连页修改规则"); winform.currentEditPac.replaceText(findWhat,replaceWith,findDlgDirect.flags);
 }
 
 findDlgDirect.onReplaceAll = function(findWhat,replaceWith,down,matchCase,wholeWord){
-	winform.currentEditPac.replaceAll(findWhat,replaceWith,findDlgDirect.flags) 
+	if(tbs.selIndex <= 2) return winform.msgWarn("请在自定代理或自定直连页修改规则"); winform.currentEditPac.replaceAll(findWhat,replaceWith,findDlgDirect.flags)
 }
 
 winform.editPacDirect.enablePopMenu(function(){
@@ -305,8 +297,8 @@ winform.editPacDirect.enablePopMenu(function(){
 			function(id){ 
 				var proxy =  web.json.tryParse(string.conv.fromWide(winform.editPacProxy.text))
 				var direct =  web.json.tryParse(string.conv.fromWide(winform.editPacDirect.text))
-				if(!(proxy)) return winform.msgErr("代理域名配置格式错误");
-				if(!(direct)) return winform.msgErr("直连域名配置格式错误");
+				if(!(proxy)) winform.msgErr("代理域名配置格式错误"); return false;
+				if(!(direct)) winform.msgErr("直连域名配置格式错误"); return false;
 				
 				import win.clip;
 				var str = win.clip.read();	
@@ -352,7 +344,7 @@ winform.editPacDirect.enablePopMenu(function(){
 					+ ignored + '个域名已经是直连域名无需添加。\r\n下一步请点下面的「保存PAC」按钮。',1500);
 			}
 		}; 
-		{ "重置为默认 PAC";
+		{ "恢复内置网络规则（保留本地规则）";
 			function(id){ 
 				import v2ray.pacServer;
 				v2ray.pacServer.resetPac();
@@ -386,8 +378,8 @@ winform.editPacProxy.enablePopMenu(function(){
 			function(id){ 
 				var proxy =  web.json.tryParse(string.conv.fromWide(winform.editPacProxy.text))
 				var direct =  web.json.tryParse(string.conv.fromWide(winform.editPacDirect.text))
-				if(!(proxy)) return winform.msgErr("代理域名配置格式错误");
-				if(!(direct)) return winform.msgErr("直连域名配置格式错误");
+				if(!(proxy)) winform.msgErr("代理域名配置格式错误"); return false;
+				if(!(direct)) winform.msgErr("直连域名配置格式错误"); return false;
 				
 				import win.clip;
 				var str = win.clip.read();	
@@ -438,7 +430,7 @@ winform.editPacProxy.enablePopMenu(function(){
 		{ "导入所有 Telegram IP";
 			function(id){ 
 				var proxy =  web.json.tryParse(string.conv.fromWide(winform.editPacProxy.text)) 
-				if(!(proxy)) return winform.msgErr("代理域名配置格式错误");
+				if(!(proxy)) winform.msgErr("代理域名配置格式错误"); return false;
 				
 				if( !..table.find(proxy,"91.108.56.0/22") ){
 					// https://ipinfo.io/AS44907 https://ipinfo.io/AS59930 https://ipinfo.io/AS62041
@@ -464,7 +456,7 @@ winform.editPacProxy.enablePopMenu(function(){
 			}
 		}; 
 		{ /*分隔符*/ };
-		{ "重置为默认 PAC";
+		{ "恢复内置网络规则（保留本地规则）";
 			function(id){ 
 				import v2ray.pacServer;
 				v2ray.pacServer.resetPac();

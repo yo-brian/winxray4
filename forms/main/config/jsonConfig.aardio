@@ -76,7 +76,7 @@ tbs.onSelchange = function(idx,strip,form){
 		winform.subscription.loadSubscriptionsOnce();
 	}
 }
-tbs.selIndex = 1;
+tbs.selIndex = 2;
 
 import style;
 winform.btnUpdate.skin(style.primaryButton);

@@ -41,21 +41,90 @@ $serverMain = ..wsock.tcp.simpleHttpServer.mainThread(
 $serverMain.threadNum = 50; 
 
 var pacPath = ..io.appData("/winXray/pac.txt");
-resetPac = function(){
-	..string.save(pacPath,$"/pac.txt" )
+// Local overrides and downloaded rules are persisted independently.
+import web.json;
+var localPath = ..io.appData("/winXray/pac-local.json");
+var networkPath = ..io.appData("/winXray/pac-network.json");
+
+parseRules = function(text){
+    var json = ..string.match(text,"var\s+rules\s*=\s*(%\[\])");
+    var rules = json ? ..web.json.tryParse(json);
+    if(!..table.isArray(rules) || !#rules) return;
+    for(i,group in rules){
+        if(!..table.isArray(group) || #group != 2) return;
+        for(j,list in group){
+            if(!..table.isArray(list)) return;
+            for(k,rule in list){
+                if(type(rule) != type.string || !#rule) return;
+            }
+        }
+    }
+    return rules;
 }
 
-if( ! ..io.exist(pacPath) ){
-	resetPac();
+loadNetworkRules = function(){
+    var rules = ..web.json.tryParse(..string.load(networkPath) : "");
+    return rules : parseRules($"/pac.txt");
 }
+
+loadLocalRules = function(){
+    var rules = ..web.json.tryParse(..string.load(localPath) : "");
+    return rules : {..table.array();..table.array()};
+}
+
+writeCombined = function(localRules,networkRules){
+    var rules = {localRules};
+    ..table.append(rules,networkRules);
+    var str = ..string.replace($"/pac.txt","var\s+rules\s*=\s*%\[\]","var rules = " + ..web.json.stringify(rules,true));
+    return ..string.save(pacPath,str);
+}
+
+// Keep the legacy PAC as a backup; preserve additions and direction overrides.
+if(!..io.exist(localPath)){
+    var legacyText = ..string.load(pacPath) : $"/pac.txt";
+    var legacy = parseRules(legacyText) : parseRules($"/pac.txt");
+    var defaults = parseRules($"/pac.txt");
+    var localRules = {..table.array();..table.array()};
+    for(i,group in legacy){
+        for(j,list in group){
+            for(k,rule in list){
+                var found = false;
+                for(n,base in defaults){
+                    if(..table.indexOf(base[j],rule)) found = true;
+                }
+                if(!found && !..table.indexOf(localRules[j],rule)) ..table.push(localRules[j],rule);
+            }
+        }
+    }
+    if(..io.exist(pacPath)) ..string.save(..io.appData("/winXray/pac-legacy.txt"),legacyText);
+    ..string.save(networkPath,..web.json.stringify(legacy,true));
+    ..string.save(localPath,..web.json.stringify(localRules,true));
+}
+
+resetPac = function(){
+    var rules = parseRules($"/pac.txt");
+    if(!..string.save(networkPath,..web.json.stringify(rules,true))) return false;
+    return writeCombined(loadLocalRules(),rules);
+}
+
+if(!..io.exist(pacPath)) writeCombined(loadLocalRules(),loadNetworkRules());
 
 loadPacText = function(){
-	return ..io.exist(pacPath) ? ..string.load(pacPath) || $"/pac.txt";
+    return ..string.load(pacPath) : $"/pac.txt";
 }
 
 savePacText = function(json){
-	var str = ..string.replace($"/pac.txt","var\s+rules\s*=\s*%\[\]","var rules = " + json);
-	..string.save(pacPath,str );
+    var rules = parseRules("var rules = " + json);
+    if(!rules || #rules != 1) return false;
+    if(!..string.save(localPath,..web.json.stringify(rules[1],true))) return false;
+    return writeCombined(rules[1],loadNetworkRules());
+}
+
+saveNetworkPac = function(text){
+    var rules = parseRules(text);
+    if(!rules) return false;
+    if(!..string.save(networkPath,..web.json.stringify(rules,true))) return false;
+    return writeCombined(loadLocalRules(),rules);
 }
 
 var inboundPort = ..thread.var();
