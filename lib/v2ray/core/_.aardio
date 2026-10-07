@@ -192,9 +192,9 @@ restart = function(editor,outbound){
 		}
 
 		var err;
-		prcsV2Ray,err = ..process.popen(corePath, corePath, "run", "-c", "config.json" );
+		prcsV2Ray,err = ..process.popen(corePath, {"run";"-c";jsonPath});
 		if(!prcsV2Ray){
-			prcsV2Ray,err = ..process.popen(corePath, corePath, "-c", "config.json" );
+			prcsV2Ray,err = ..process.popen(corePath, {"-c";jsonPath});
 		}
 		..publish("uiCommand.print", corePath);																		   
 		if(!prcsV2Ray){
@@ -218,6 +218,16 @@ restart = function(editor,outbound){
 			
 			v2RayStarting = false;
 			return;
+		}
+		// Creating a process does not mean the core started successfully.
+		var exited,startOutput,startError,startExit = prcsV2Ray.waitOne(500);
+		if(exited){
+			..publish("uiCommand.print",startOutput : startError : "Xray exited during startup.");
+			prcsV2Ray.close();
+			prcsV2Ray = null;
+			if(nexCore) nexCore.stop();
+			v2RayStarting = false;
+			return false,"Xray 启动后立即退出，详情见日志。";
 		}
 		prcsV2Ray.assignToJobObject(process.job.limitKill);
 		prcsV2Ray.codepage = 65001;	

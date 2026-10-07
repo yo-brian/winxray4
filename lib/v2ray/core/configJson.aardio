@@ -89,7 +89,7 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 			
 		var rawPk = outbound.publicKey : outbound.pbk : outbound.publickey : outbound.password : "";
 		if(#rawPk){
-			rawPk = ..string.trim(rawPk, '"\'\s\r\n ');
+			rawPk = ..string.trim(rawPk, '"\'\t\r\n ');
 			var hashPos = ..string.indexOf(rawPk, "#");
 			if(hashPos) rawPk = ..string.left(rawPk, hashPos - 1);
 			rawPk = ..string.replace(rawPk, "@+", "-");
@@ -99,7 +99,7 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 		
 		var rawSid = outbound.shortId : outbound.sid : outbound.shortid : "";
 		if(#rawSid){
-			rawSid = ..string.trim(rawSid, '"\'\s\r\n ');
+			rawSid = ..string.trim(rawSid, '"\'\t\r\n ');
 			var hashPos = ..string.indexOf(rawSid, "#");
 			if(hashPos) rawSid = ..string.left(rawSid, hashPos - 1);
 		}

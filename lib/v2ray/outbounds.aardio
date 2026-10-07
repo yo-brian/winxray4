@@ -1667,7 +1667,7 @@ validOutbound = function(outbound){
 	}
 
 	if(outbound.publicKey){
-		outbound.publicKey = ..string.trim(outbound.publicKey, '"\'\s\r\n ');
+		outbound.publicKey = ..string.trim(outbound.publicKey, '"\'\t\r\n ');
 		var hashPos = ..string.indexOf(outbound.publicKey, "#");
 		if(hashPos) outbound.publicKey = ..string.left(outbound.publicKey, hashPos - 1);
 		outbound.publicKey = ..string.replace(outbound.publicKey, "@+", "-");
@@ -1675,7 +1675,7 @@ validOutbound = function(outbound){
 		outbound.publicKey = ..string.replace(outbound.publicKey, "@=", "");
 	}
 	if(outbound.shortId){
-		outbound.shortId = ..string.trim(outbound.shortId, '"\'\s\r\n ');
+		outbound.shortId = ..string.trim(outbound.shortId, '"\'\t\r\n ');
 		var hashPos = ..string.indexOf(outbound.shortId, "#");
 		if(hashPos) outbound.shortId = ..string.left(outbound.shortId, hashPos - 1);
 	}
