@@ -371,6 +371,7 @@ var editOutboundTip = {
 	sid = {"REALITY简短ID";"服务端的 shortId (sid)，十六进制字符串"};
 	spiderX = {"REALITY爬虫路径";"客户端发起请求时的伪装爬虫路径，默认 /"};
 	spx = {"REALITY爬虫路径";"客户端发起请求时的伪装爬虫路径，默认 /"};
+	mldsa65Verify = {"REALITY ML-DSA-65";"可选的 REALITY 后量子签名验证公钥"};
 	fingerprint = {"uTLS指纹";"模拟客户端指纹，可选值：chrome, firefox, safari, ios, android, edge, random, randomized"};
 	fp = {"uTLS指纹";"模拟客户端指纹，可选值：chrome, firefox, safari, ios, android, edge, random, randomized"};
 	alpn = {"应用层协商(ALPN)";'TLS/QUIC 应用层协商协议，如 h3, h2, http/1.1'};
@@ -706,6 +707,8 @@ winform.btnAddOutbound.oncommand = function(id,event){
 }
 
 import win.guid;
+import crypt;
+import crypt.random;
 winform.btnGenGuid.oncommand = function(id,event){
     var sel = winform.cmbProtocol.selText;
 	if(sel=="socks" || sel=="http" || sel=="https" || sel=="naive"  ){
@@ -738,7 +741,12 @@ winform.btnGenGuid.oncommand = function(id,event){
 		winform.updateSharedLink();
 	}
 	elseif(sel=="shadowsocks" || sel=="ssr"  ){
-		winform.editId.text = string.random(22,"/@0123456abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+		var method = winform.cmbSecurity.selText;
+		if(sel == "shadowsocks" && string.startWith(method, "2022-")){
+			var keyLength = method == "2022-blake3-aes-128-gcm" ? 16 : 32;
+			winform.editId.text = crypt.encodeBin(crypt.random(keyLength));
+		}
+		else winform.editId.text = string.random(22,"/@0123456abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
 	}
 	else {
 		var guid = win.guid.create();

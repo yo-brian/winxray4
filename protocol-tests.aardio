@@ -1,0 +1,54 @@
+// Run this file in aardio from the repository root. No network is used.
+import console;
+import crypt;
+import crypt.random;
+import web.json;
+import v2ray.outbounds;
+
+var key = "+/8AAAAAAAAAAAAAAAAAAA==";
+var methods = {"2022-blake3-aes-128-gcm";"2022-blake3-aes-256-gcm";"2022-blake3-chacha20-poly1305"};
+for(i,method in methods){
+    var length = i == 1 ? 16 : 32;
+    var generated = crypt.encodeBin(crypt.random(length));
+    assert(#crypt.decodeBin(generated) == length);
+    var node = {protocol="shadowsocks";security=method;id=generated + ":" + generated;address="2001:db8::1";port=443;ps="SS 2022"};
+    var link = v2ray.outbounds.exportSharedLinks({node});
+    assert(string.indexOf(link, "ss://2022-"));
+    assert(string.indexOf(link, "[2001:db8::1]:443"));
+    var parsed = v2ray.outbounds.importFromString(link);
+    assert(#parsed == 1);
+    assert(parsed[1].security == method && parsed[1].id == node.id);
+    assert(parsed[1].address == node.address && parsed[1].ps == node.ps);
+}
+var parsed = v2ray.outbounds.importFromString("ss://2022-blake3-aes-128-gcm:%2B%2F8AAAAAAAAAAAAAAAAAAA%3D%3D@example.com:443/#test");
+assert(#parsed == 1 && parsed[1].id == key);
+parsed = v2ray.outbounds.importFromString("ss://aes-128-gcm:+test@example.com:443");
+assert(#parsed == 1 && parsed[1].id == "+test");
+var legacy = "ss://" + crypt.encodeBin("aes-128-gcm:server:user@example.com:443");
+parsed = v2ray.outbounds.importFromString(legacy);
+assert(#parsed == 1 && parsed[1].security == "aes-128-gcm" && parsed[1].id == "server:user");
+
+// Isolate configuration generation from the user's persisted application settings.
+config = {core={default={inbounds={{tag="proxy";protocol="socks";port=1080};{tag="http_proxy";protocol="http";port=1081}};outbounds={{tag="proxy";protocol="freedom"}}}}};
+assert(table.isArrayLike(config.core.default.outbounds));
+assert(table.isArrayLike(config.core.default.inbounds));
+var source = string.load("/lib/v2ray/core/configJson.aardio");
+source = string.replace(source,"@import config;", "");
+loadcodex(source);
+var node = {protocol="vless";address="example.com";port=443;id="00000000-0000-4000-8000-000000000001";tls="reality";password="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";sni="www.example.com";flow="";mldsa65Verify="test-verification-key"};
+assert(v2ray.outbounds.validOutbound(node));
+assert(node.id == "00000000-0000-4000-8000-000000000001" && node.password === null);
+var path = io.fullpath("/.local/protocol-test-config.json");
+v2ray.core.configJson.write(path,node,1080,1081);
+var configOut = web.json.parse(string.load(path)).outbounds[1];
+assert(!#configOut.settings.vnext[1].users[1].flow);
+assert(configOut.streamSettings.realitySettings.publicKey == node.publicKey);
+assert(configOut.streamSettings.realitySettings.password == node.publicKey);
+assert(configOut.streamSettings.realitySettings.mldsa65Verify == node.mldsa65Verify);
+assert(configOut.mux === null);
+node.flow = "xtls-rprx-vision";
+v2ray.core.configJson.write(path,node,1080,1081);
+configOut = web.json.parse(string.load(path)).outbounds[1];
+assert(configOut.settings.vnext[1].users[1].flow == node.flow);
+console.log("Protocol regression tests passed.");
+console.pause();

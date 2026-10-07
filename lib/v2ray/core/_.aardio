@@ -19,7 +19,7 @@ getSystemProxyConfig = function(){
 
 isInboundPortChanged = function(){
 	var inbounds = ..config.core.default.inbounds;
-	if(! (..table.isArray(inbounds) && inbounds[1] && inbounds[2]) ){
+	if(! (..table.isArrayLike(inbounds) && inbounds[1] && inbounds[2]) ){
 		return true;
 	}	
 	
@@ -36,7 +36,7 @@ restart = function(editor,outbound){
     }
 
 	var inbounds = ..config.core.default[["inbounds"]];
-	if(! (..table.isArray(inbounds) && inbounds[1] ) ){
+	if(! (..table.isArrayLike(inbounds) && inbounds[1] ) ){
 		return null,"错误的入站SOCKS代理服务器配置" 
 	}
 	if(! ( inbounds[2] ) ){
@@ -46,7 +46,7 @@ restart = function(editor,outbound){
 	if(v2RayStarting){ return null,"不能重复启动 V2Ray Core"  } 
 	v2RayStarting = true;
 	
-	var corePath = getPath(editor.hwnd);
+	var corePath = getPath(editor.hwnd, outbound.protocol == "vless" || (outbound.protocol == "shadowsocks" && ..string.startWith(outbound.security, "2022-")));
 	if(!corePath){ 
 		v2RayStarting = false;
 		return false,"启动失败,未找到 Xray Core (xray.exe)"; 
@@ -175,6 +175,22 @@ restart = function(editor,outbound){
 			return false,err:"启动失败,写入配置文件遇到错误！"; 
 		}
 		
+		var checker,checkError = ..process.popen(corePath, {"run";"-test";"-c";jsonPath});
+		if(!checker){
+			if(nexCore) nexCore.stop();
+			v2RayStarting = false;
+			return false,checkError : "Unable to validate the Xray configuration.";
+		}
+		var checked,checkOutput,checkStderr,checkExit = checker.waitOne(10000);
+		if(checked) checker.close();
+		if(!checked){ checker.terminate(); }
+		if(!checked || checkExit != 0){
+			if(nexCore) nexCore.stop();
+			v2RayStarting = false;
+			..publish("uiCommand.print",checkOutput : checkStderr : "Xray configuration validation timed out.");
+			return false,"Xray 配置校验失败，请检查核心版本和节点设置，详情见日志。";
+		}
+
 		var err;
 		prcsV2Ray,err = ..process.popen(corePath, corePath, "run", "-c", "config.json" );
 		if(!prcsV2Ray){
@@ -286,7 +302,7 @@ var getV2RayCoreUrl = function(){
 	return url,tag;
 } 
 
-getPath = function(hwnd){
+getPath = function(hwnd,requireXray){
 	var checkPaths = {
 		..io.fullpath("/xray-core/xray.exe");
 		..io.fullpath("/v2ray-core/xray.exe");
@@ -297,7 +313,7 @@ getPath = function(hwnd){
 	};
 	
 	for(i=1;#checkPaths;1){
-		if(..io.exist(checkPaths[i])){
+		if((!requireXray || i <= 3) && ..io.exist(checkPaths[i])){
 			return checkPaths[i];
 		}
 	}
@@ -331,7 +347,7 @@ getPath = function(hwnd){
 			return downloadedPath;
 		}
 		var fallbackPath = ..io.appData("/winXray/core/v2ray.exe");
-		if(..io.exist(fallbackPath)){
+		if(!requireXray && ..io.exist(fallbackPath)){
 			return fallbackPath;
 		}
 		return null;

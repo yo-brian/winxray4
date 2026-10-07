@@ -29,7 +29,13 @@ exportSharedLinks = function(outbounds){
 			..table.push(outString,vmess);
 		}
 		elseif(outbound.protocol == "shadowsocks"){
-			var ss = "ss://" + ..crypt.encodeBin( outbound.security + ":" + outbound.id + "@" + outbound.address + ":" + outbound.port) + "#" + outbound.address + ":" + outbound.port;
+			var host = outbound.address;
+			if(..string.indexOf(host, ":") && host[1] != '['#) host = "[" + host + "]";
+			var userinfo = ..string.startWith(outbound.security, "2022-")
+				? (..inet.url.encode(outbound.security) + ":" + ..inet.url.encode(outbound.id))
+				: ..crypt.bin.encodeUrlBase64(outbound.security + ":" + outbound.id);
+			var ss = "ss://" + userinfo + "@" + host + ":" + outbound.port;
+			if(#outbound.ps) ss = ss + "#" + ..inet.url.encode(outbound.ps);
 			..table.push(outString,ss);
 		} 
 		elseif(outbound.protocol == "socks"){
@@ -753,21 +759,32 @@ importFromString = function(str,subscribeUrl){
 
 		var ss,comment = ..string.match(line,`ss\:\/\/([^\s\#]+)(<#\S+>?)`);
 		if( ss ) { 
-			var userinfo,address,port = ..string.match(ss,"^([^:]+)\@(.+)\:(\d+)")	
+			// SIP002 plaintext, Base64 userinfo, and legacy whole-URI Base64.
+			var endpoint = ..string.match(ss, "^([^?]+)") : ss;
+			var userinfo,address,port = ..string.match(endpoint,"^(.+)\@(.+)\:(\d+)/?$");
+			var method,password;
 			if(!(userinfo&&address&&port)){
-				var str = ..crypt.bin.decodeUrlBase64(ss); 
-				if(str){ ss = str; } 
-				
-				method,password,address,port = ..string.match(ss,"^(.+)\:(.+)\@(.+)\:(\d+)")
+				var decoded = ..crypt.bin.decodeUrlBase64(ss);
+				if(decoded){
+					method,password,address,port = ..string.match(decoded,"^([^:]+)\:(.+)\@(.+)\:(\d+)/?$");
+				}
 			}
 			else {
-				userinfo = ..crypt.bin.decodeUrlBase64(userinfo); 
-				if(userinfo){
-					method,password = ..string.match(userinfo,"^(.+)\:(.+)$")
-				}	
+				if(..string.indexOf(userinfo, ":")){
+					method,password = ..string.match(userinfo,"^([^:]+)\:(.+)$");
+					if(method && password){
+						method = ..string.unhex(method,"%");
+						password = ..string.unhex(password,"%");
+					}
+				}
+				else {
+					userinfo = ..crypt.bin.decodeUrlBase64(userinfo);
+					if(userinfo) method,password = ..string.match(userinfo,"^([^:]+)\:(.+)$");
+				}
 			}
-	
+
 			if(address && password && port){
+				if(address[1] == '['#) address = ..string.sub(address,2,-2);
 				var outbound = {
 					address = address;
 					port = tonumber(port);
@@ -1507,6 +1524,11 @@ validOutbound = function(outbound){
 		}
 	}
 	
+	// VLESS password aliases the REALITY key, never the user UUID.
+	if(outbound.protocol == "vless" && outbound.password && (outbound.tls == "reality" || outbound.security == "reality")){
+		outbound.publicKey = outbound.publicKey : outbound.pbk : outbound.password;
+		outbound.password = null;
+	}
 	if(!outbound.id){
 		if(outbound.password){
 			outbound.id = outbound.password;

@@ -13,12 +13,12 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 	}
 	
 	var currentCore = ..table.clone(..config.core.default);
-	if(! ..table.isArray(currentCore.outbounds) ){
+	if(! ..table.isArrayLike(currentCore.outbounds) ){
 		return null,"错误的出站代理服务器配置" 
 	}
 	
 	var inboundsInCore = currentCore.inbounds;
-	if(! ..table.isArray(inboundsInCore) ){
+	if(! ..table.isArrayLike(inboundsInCore) ){
 		return null,"错误的入站代理服务器配置" 
 	}
 	
@@ -58,7 +58,7 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 	
 	if(#outbound.tls && !outbound.sni){
 		var host = outbound.host;
-		if(..table.isArray(host)){ host = host[1] } 
+		if(..table.isArrayLike(host)){ host = host[1] }
 		outbound.sni = host ? host : outbound.address
 	}
 	
@@ -81,13 +81,13 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 		if(flow == "xtls-rprx-direct" || flow == "xtls-rprx-origin"){
 			flow = "xtls-rprx-vision";
 		}
-		if(!flow && (effectiveSecurity == "xtls" || isReality)){
+		if(!flow && effectiveSecurity == "xtls"){
 			if(outbound.network == "tcp" || !outbound.network){
 				flow = "xtls-rprx-vision";
 			}
 		}
 			
-		var rawPk = outbound.publicKey : outbound.pbk : outbound.publickey : "";
+		var rawPk = outbound.publicKey : outbound.pbk : outbound.publickey : outbound.password : "";
 		if(#rawPk){
 			rawPk = ..string.trim(rawPk, '"\'\s\r\n ');
 			var hashPos = ..string.indexOf(rawPk, "#");
@@ -132,6 +132,8 @@ write  = function(jsonPath,outbound,sockPort,httpPort){
 					fingerprint = outbound.fingerprint : outbound.fp : "chrome";
 					serverName = outbound.sni : outbound.address;
 					publicKey = rawPk;
+					password = rawPk; // REALITY key aliases for old and new Xray cores.
+					mldsa65Verify = outbound.mldsa65Verify;
 					shortId = rawSid;
 					spiderX = outbound.spiderX : outbound.spx : "/";
 				} : null;
