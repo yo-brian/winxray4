@@ -1,0 +1,112 @@
+import win.ui;
+var winform = win.form(text="首页";right=959;bottom=591;bgcolor=16777215);
+winform.add(
+    title={cls="static";text="winXray";left=120;top=95;right=820;bottom=143;font=LOGFONT(h=-32);color=3947580;transparent=1;z=1};
+    lbNode={cls="static";text="选择节点";left=120;top=178;right=820;bottom=204;font=LOGFONT(h=-15);transparent=1;z=2};
+    nodes={cls="combobox";left=120;top=215;right=820;bottom=250;dr=1;edge=1;items={};mode="dropdown";font=LOGFONT(h=-16);z=3};
+    smart={cls="radiobutton";text="智能分流模式";left=120;top=290;right=320;bottom=323;font=LOGFONT(h=-17);bgcolor=16777215;z=4};
+    global={cls="radiobutton";text="全局模式";left=350;top=290;right=540;bottom=323;font=LOGFONT(h=-17);bgcolor=16777215;z=5};
+    start={cls="plus";text="点我启动";left=120;top=365;right=820;bottom=420;dr=1;font=LOGFONT(h=-18);bgcolor=11580047;notify=1;z=6};
+    stop={cls="plus";text="点我停止";left=120;top=365;right=820;bottom=420;dr=1;font=LOGFONT(h=-18);bgcolor=14935259;notify=1;hide=1;z=7};
+    traffic={cls="static";text="剩余流量 / 总流量：订阅未提供";left=120;top=455;right=820;bottom=485;dr=1;font=LOGFONT(h=-15);transparent=1;z=8};
+    expiry={cls="static";text="到期时间：订阅未提供";left=120;top=492;right=820;bottom=522;dr=1;font=LOGFONT(h=-15);transparent=1;z=9}
+);
+import config;
+import v2ray.core;
+import sysProxy;
+import style;
+winform.start.skin(style.primaryButton);
+winform.stop.skin(style.button);
+var selectedNode;
+var preferredMode = config.proxy.mode == "proxy" ? "proxy" : "pac";
+var signature;
+var refreshing = false;
+var connected = false;
+var formatBytes = function(bytes){
+    var units = {"B";"KB";"MB";"GB";"TB"};
+    var index = 1;
+    while(bytes >= 1024 && index < #units){ bytes /= 1024; index++; }
+    return string.format("%.2f %s",bytes,units[index]);
+}
+
+winform.refresh = function(){
+    var labels = table.array();
+    var selectedIndex;
+    for(i,node in config.proxy.outbounds){
+        table.push(labels,(node.ps : node.address : "节点") + "  ·  " + (node.protocol : "") + "  " + (node.address : ""));
+        if(node === selectedNode) selectedIndex = i;
+    }
+    var nextSignature = string.join(labels,"\n");
+    if(nextSignature != signature){
+        refreshing = true;
+        winform.nodes.items = labels;
+        var controller = mainForm.proxyController;
+        winform.nodes.selIndex = selectedIndex : (controller ? controller.listview.activeOutboundIndex) : (#labels ? 1 : 0);
+        selectedNode = config.proxy.outbounds[winform.nodes.selIndex];
+        refreshing = false;
+        signature = nextSignature;
+    }
+    winform.smart.checked = preferredMode == "pac";
+    winform.global.checked = preferredMode == "proxy";
+    var controller = mainForm.proxyController;
+    var starting = controller && (controller.autoTesting || controller.btnTcping.disabledText);
+    winform.start.hide = connected;
+    winform.stop.hide = !connected;
+    winform.start.disabled = !#labels || starting;
+    winform.start.text = starting && !connected ? "正在启动…" : "点我启动";
+    var node = config.proxy.outbounds[winform.nodes.selIndex];
+    var info = node && node.subscribeUrl && config.proxy.subscriptionInfo ? config.proxy.subscriptionInfo[node.subscribeUrl];
+    winform.traffic.text = "剩余流量 / 总流量：订阅未提供";
+    winform.expiry.text = "到期时间：订阅未提供";
+    if(info){
+        if(info.total !== null && info.upload !== null && info.download !== null){
+            var remaining = info.total - info.upload - info.download;
+            if(remaining < 0) remaining = 0;
+            winform.traffic.text = "剩余流量 / 总流量：" + formatBytes(remaining) + " / " + formatBytes(info.total);
+        }
+        if(info.expire) winform.expiry.text = "到期时间：" + tostring(time(info.expire));
+        elseif(info.expire === 0) winform.expiry.text = "到期时间：长期有效";
+    }
+}
+
+winform.nodes.onOk = function(){
+    if(refreshing) return;
+    selectedNode = config.proxy.outbounds[winform.nodes.selIndex];
+    if(selectedNode && v2ray.core.isRunning()) mainForm.proxyController.startNode(winform.nodes.selIndex);
+}
+winform.smart.oncommand = function(){
+    preferredMode = "pac";
+    sysProxy.switchToPacMode();
+    winform.refresh();
+}
+winform.global.oncommand = function(){
+    preferredMode = "proxy";
+    sysProxy.switchToGlobalMode();
+    winform.refresh();
+}
+winform.start.oncommand = function(){
+    var index = winform.nodes.selIndex;
+    if(!config.proxy.outbounds[index]) return;
+    sysProxy.setMode(preferredMode);
+    mainForm.proxyController.startNode(index);
+    winform.refresh();
+}
+winform.stop.oncommand = function(){
+    mainForm.proxyController.stopNode();
+    winform.refresh();
+}
+subscribe("sysProxy.modeChanged",function(mode){
+    if(mode == "proxy" || mode == "pac") preferredMode = mode;
+    winform.refresh();
+});
+subscribe("activeOutbound",function(address){
+    connected = address ? true : false;
+    winform.refresh();
+});
+subscribe("v2RayCore.stopped",function(){ connected = false; winform.refresh(); });
+winform.refresh();
+winform.setInterval(function(){ winform.refresh(); },1000);
+winform.enableDpiScaling();
+winform.show();
+win.loopMessage();
+return winform;

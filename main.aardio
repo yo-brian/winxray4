@@ -171,6 +171,7 @@ navExit={cls="plus";text="退出";left=0;top=590;right=85;bottom=670;bkBottom=3;
 navJsonConfig={cls="plus";text="配置";left=0;top=132;right=85;bottom=212;bkBottom=3;bkLeft=7;bkRight=8;bkTop=2;border={color=0xFFFF0000};color=0xFFFFFF;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={font=LOGFONT(h=-37;name='FontAwesome');padding={bottom=20}};iconText='\uF0F6';notify=1;textPadding={bottom=10};valign="bottom";x=0.5;y=0.2;z=5};
 navStart={cls="plus";text="首页";left=0;top=48;right=85;bottom=128;bkBottom=3;bkLeft=7;bkRight=8;bkTop=2;border={color=0xFFFF0000};color=0xFFFFFF;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={font=LOGFONT(h=-37;name='FontAwesome');padding={bottom=20}};iconText='\uF015';notify=1;textPadding={bottom=10};valign="bottom";x=0.5;y=0.2;z=3};
 navTools={cls="plus";text="工具";left=0;top=216;right=85;bottom=296;bkBottom=3;bkLeft=7;bkRight=8;bkTop=2;border={color=0xFFFF0000};color=0xFFFFFF;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={font=LOGFONT(h=-37;name='FontAwesome');padding={bottom=20}};iconText='\uF0AD';notify=1;textPadding={bottom=10};valign="bottom";x=0.5;y=0.2;z=8};
+navNodes={cls="plus";text="节点";left=0;top=300;right=85;bottom=380;color=0xFFFFFF;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={font=LOGFONT(h=-32;name='FontAwesome');padding={bottom=20}};iconText='\uF0C9';notify=1;textPadding={bottom=10};valign="bottom";z=10};
 titleBar={cls="bkplus";left=0;top=0;right=1022;bottom=38;bgcolor=0x7AA0FF;dl=1;dr=1;dt=1;forecolor=0xFFFFFF;linearGradient=180;z=2}
 )
 /*}}*/
@@ -193,7 +194,8 @@ import win.ui.tabs;
 var tbs = win.ui.tabs( 
 	mainForm.navStart,
 	mainForm.navJsonConfig,
-	mainForm.navTools
+	mainForm.navTools,
+	mainForm.navNodes
 );
 
 tbs.skin({
@@ -211,7 +213,9 @@ tbs.skin({
 	}
 })
 
-tbs.loadForm(1,"\forms\main\v2ray.aardio" );
+tbs.loadForm(4,"\forms\main\v2ray.aardio" );
+tbs.preloadForm(4,false);
+tbs.loadForm(1,"\forms\main\home.aardio" );
 tbs.loadForm(2,"\forms\main\config\jsonConfig.aardio" );
 tbs.loadForm(3,"\forms\main\tools\tools.aardio");
 

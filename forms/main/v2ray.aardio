@@ -32,7 +32,7 @@ import v2ray.core;
 var currentOutboundIndex,currentOutboundAddress;
 var activeOutboundToken = 0;
 var retryOnNetworkAliveTimerId;
-frmXray.userStopped = false;
+frmXray.userStopped = true;
 frmXray.tcpingConnectTimerId = null;
 
 var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTesting){
@@ -1099,11 +1099,7 @@ if(#config.proxy.outbounds){
 	}
 	frmXray.listview.setTable(outbounds);	
 	
-	frmXray.setTimeout( 
-		function(){
-			publish("uiCommand.restartV2RayCore");	
-		},1000
-	);	
+	// Services are started explicitly from the home page.
 }
 
 subscribe("sysProxy.modeChanged",function(mode){
@@ -1321,6 +1317,20 @@ if(config.proxy.test){
 
 frmXray.chkAutoTest.skin(style.checkBox);
 frmXray.edit.print("友情提醒：WinXray 未注册任何域名，谨防钓鱼网站")
+
+// Shared controls for the simple home page; keep connection and stop behavior centralized.
+mainForm.proxyController = frmXray;
+frmXray.startNode = function(index){
+    var node = config.proxy.outbounds[index];
+    if(!node) return false;
+    frmXray.listview.setSelected(index,true);
+    return activeOutbound(index,node.address,false);
+}
+frmXray.stopNode = function(){
+    if(v2ray.core.isRunning() || frmXray.autoTesting || frmXray.btnTcping.disabledText || frmXray.listview.activeOutboundIndex !== null){
+        frmXray.btnStopCore.oncommand();
+    }
+}
 
 frmXray.enableDpiScaling();
 win.loopMessage();

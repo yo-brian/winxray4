@@ -455,23 +455,43 @@ importFromString = function(str,subscribeUrl){
 			}
 		}
 		
-		str = ..win.invoke(
+		var subscriptionHeader;
+		var responseJson = ..win.invoke(
 			function(subscribeUrl){
 				import inet.http; 
+				import web.json;
 				import web.rest.github;
 				if( string.indexOf(subscribeUrl,"github.com")
 					|| string.indexOf(subscribeUrl,"raw.githubusercontent.com") 
 					){
 					
 					var ret  = web.rest.github.getContent(subscribeUrl)
-					if(ret) return ret;
+					if(ret) return web.json.stringify({body=ret;status=200});
 				}
 
-				return inet.http().get(subscribeUrl);
+				import zlib;
+				var http = inet.http("v2rayN/7.0");
+				http.setTimeouts(10000,15000,20000);
+				http.addHeaders = "Accept-Encoding: identity\r\n";
+				var body,downloadError = http.get(subscribeUrl);
+				var header = body ? http.readHeader("Subscription-Userinfo:");
+				var status = http.statusCode;
+				http.close();
+				return web.json.stringify({body=body;header=header;status=status;errorCode=type(downloadError)=="number" ? downloadError : null});
 			},subscribeUrl 
 		)
 	
 		form.close();
+		var response = responseJson ? ..web.json.tryParse(responseJson);
+		str = response ? response.body;
+		subscriptionHeader = response ? response.header;
+		if(!response || response.status != 200 || !#str){
+			var detail = !response ? "下载线程未返回有效结果" : (response.status ? "HTTP " + tostring(response.status) : "网络请求失败");
+			if(response && response.errorCode) detail += "，错误码 " + tostring(response.errorCode);
+			..mainForm.msgErr("订阅下载失败（" + detail + "），原有节点已保留");
+			return;
+		}
+		if(subscriptionHeader) ..publish("subscription.info",subscribeUrl,subscriptionHeader);
 		if(!str){
 			return;
 		}
@@ -512,17 +532,22 @@ importFromString = function(str,subscribeUrl){
 		_subscriptionResponseCache[subscribeUrl] = crc32;
 	}
 
-	if(!..string.find(str,"<vmess>|<vless>|<trojan>|<trojan-go>|<tuic>|<hysteria2>|<hy2>|<hysteria>|<naive>|<ss>|<ssr>|<http>|<https>|%\{\}|%\[\]")){
-		var cleanStr = ..string.replace(str,"\s+","");
-		if(..string.match(cleanStr,"^[\w=+/-_]+$")){
-			var decoded = ..crypt.decodeBin(cleanStr);
-			if(decoded && #decoded){
-				str = decoded;
-			}
-		}
-	}
-	
-	var outbounds = ..table.array();
+	// Detect full links, not incidental words inside a Base64 payload.
+    str = ..string.trim(str);
+    var cleanStr = ..string.replace(str,"\s+","");
+    if(!..string.find(str,"://") && ..string.match(cleanStr,"^[A-Za-z0-9+/=_-]+$")){
+        cleanStr = ..string.replace(cleanStr,"@-","+");
+        cleanStr = ..string.replace(cleanStr,"@_","/");
+        while(#cleanStr % 4) cleanStr += "=";
+        var decoded = ..crypt.decodeBin(cleanStr,,1/*_CRYPT_STRING_BASE64*/);
+        if(decoded && #decoded) str = decoded;
+    }
+    if(subscribeUrl && (..string.find(str,"<!DOCTYPE") || ..string.find(str,"<html"))){
+        ..mainForm.msgErr("订阅返回了网页而不是节点数据，原有节点已保留");
+        return;
+    }
+
+    var outbounds = ..table.array();
 	for(line in ..string.lines(str) ){
 		if(#outbounds>=1500){
 			import win.dlg.message;
@@ -1766,6 +1791,17 @@ validOutbound = function(outbound){
 	}
 }
 
+..subscribe("subscription.info",function(url,header){
+    var info = {};
+    for(key,value in ..string.gmatch(..string.lower(header),"([a-z]+)\s*=\s*(\d+)")){
+        if(key == "upload" || key == "download" || key == "total" || key == "expire") info[key] = tonumber(value);
+    }
+    if(!..table.count(info)) return;
+    if(!..config.proxy.subscriptionInfo) ..config.proxy.subscriptionInfo = {};
+    ..config.proxy.subscriptionInfo[url] = info;
+    ..config.proxy.save();
+});
+
 updateSubscription = function(outbondSubscribeUrlMap){
 	
 	var cfgOutbounds = ..config.proxy.outbounds : ..table.array(); 
@@ -1816,7 +1852,8 @@ updateSubscription = function(outbondSubscribeUrlMap){
 	..config.proxy.save();
 	..publish("outbounds.updateConfigJson");
 	..publish("uiCommand.restartV2RayCore",cfgOutbounds) 
-	..mainForm.msgOk("已刷新" + count + "个订阅服务器。",1500);
+	if(count) ..mainForm.msgOk("已刷新" + count + "个订阅服务器。",1500);
+	else ..mainForm.msgErr("订阅未识别到支持的节点，请检查订阅返回格式；原有节点已保留");
 	
 	return count;
 }
@@ -1854,6 +1891,10 @@ autoUpdateSubscription = function(){
 				}
 				else{
 					outbondSubscribeUrlMap[url] = http.get(url);
+					if(outbondSubscribeUrlMap[url]){
+						var header = http.readHeader("Subscription-Userinfo:");
+						if(header) winform.publish("subscription.info",url,header);
+					}
 				}
 				
 				if(!outbondSubscribeUrlMap[url]){
