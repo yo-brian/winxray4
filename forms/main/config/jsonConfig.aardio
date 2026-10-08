@@ -10,8 +10,8 @@ btnUpdateHysteriaCore={cls="plus";text="下载 / 更新 Hysteria Core";left=680;
 btnUpdateTuicCore={cls="plus";text="下载 / 更新 TUIC Core";left=435;top=39;right=670;bottom=67;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-17;name='FontAwesome');padding={left=18}};iconText='\uF135';notify=1;textPadding={left=50};z=20};
 btnUpdateRules={cls="plus";text="下载 / 更新 路由规则";left=227;top=39;right=425;bottom=67;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-19;name='FontAwesome');padding={left=18}};iconText='\uF041';notify=1;textPadding={left=50};z=15};
 btnUpdateSsrCore={cls="plus";text="下载 / 更新 SSR Core";left=16;top=39;right=214;bottom=67;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-17;name='FontAwesome');padding={left=18}};iconText='\uF1D8';notify=1;textPadding={left=50};z=16};
-btnUpdateV2RayCore={cls="plus";text="下载 / 更新 V2Ray Core";left=16;top=5;right=223;bottom=33;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-19;name='FontAwesome');padding={left=18}};iconText='\uF27D';notify=1;textPadding={left=50};z=13};
-btnUpdateXrayCore={cls="plus";text="下载 / 更新 Xray Core";left=227;top=5;right=425;bottom=33;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-19;name='FontAwesome');padding={left=18}};iconText='\uF0E7';notify=1;textPadding={left=50};z=14};
+btnUpdateV2RayCore={cls="plus";text="下载 / 更新 sing-box";left=16;top=5;right=223;bottom=33;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-19;name='FontAwesome');padding={left=18}};iconText='\uF27D';notify=1;textPadding={left=50};z=13};
+btnUpdateXrayCore={cls="plus";text="下载 / 更新 sing-box Core";left=227;top=5;right=425;bottom=33;align="left";color=3947580;dl=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-19;name='FontAwesome');padding={left=18}};iconText='\uF0E7';notify=1;textPadding={left=50};z=14};
 editCoreConfig={cls="edit";left=9;top=72;right=930;bottom=594;db=1;dl=1;dr=1;dt=1;edge=1;hide=1;hscroll=1;multiline=1;vscroll=1;z=7};
 editOutbounds={cls="edit";left=9;top=29;right=930;bottom=594;db=1;dl=1;dr=1;dt=1;edge=1;hscroll=1;multiline=1;vscroll=1;z=8};
 lbTip={cls="static";text="可在下面输入多行服务器分享链接，或JSON数组( 点击字段名会显示用法说明 )：";left=11;top=9;right=899;bottom=29;color=3947580;dl=1;dr=1;dt=1;font=LOGFONT(h=-13);transparent=1;z=9};
@@ -114,6 +114,11 @@ winform.btnUpdate.oncommand = function(id,event){
 			winform.btnUpdate.disabledText = null;
 			return;
 		}
+		import v2ray.core.singBoxJson;
+		cfg,err=v2ray.core.singBoxJson.template(cfg);
+		if(!cfg){
+			winform.msgErr(err);winform.btnUpdate.disabledText=null;return;
+		}
 		
 		var proxyOutboundInCore;
 		for(k,ob in cfg.outbounds){
@@ -156,7 +161,7 @@ winform.btnUpdate.oncommand = function(id,event){
 			return; 
 		}
 
-		if(type(socksInbounds[["port"]])!="number"){
+		if(type((socksInbounds.listen_port : socksInbounds.port))!="number"){
 			winform.msgErr(`出站节点 {tag:"proxy"} port字段必须用数值指定监听端口`);
 			winform.btnUpdate.disabledText = null;
 			return; 
@@ -168,14 +173,15 @@ winform.btnUpdate.oncommand = function(id,event){
 			return; 
 		}
 
-		if(type(httpInbounds[["port"]])!="number"){ 
+		if(type((httpInbounds.listen_port : httpInbounds.port))!="number"){
 			winform.msgErr(`出站节点 {tag:"http_proxy"} port字段必须用数值指定监听端口`);
 			winform.btnUpdate.disabledText = null;
 			return; 
 		} 
 		
 		config.core.default = cfg;
-		config.core.customText = winform.editCoreConfig.text;
+		config.core.customText = web.json.stringify(cfg,true);
+		winform.editCoreConfig.text=config.core.customText;
 		config.core.save();
 		
 		publish("uiCommand.restartV2RayCore",cfg);   
@@ -618,47 +624,13 @@ winform.editOutbounds.enablePopMenu(function(){
 })
 
 winform.editCoreConfig.enablePopMenu({ 
-	{ "插入路由规则: 广告拦截 (geosite:category-ads-all -> block)";
-		function(id){
-			winform.editCoreConfig.selText = '{\n                "domain": [\n                    "geosite:category-ads-all"\n                ],\n                "outboundTag": "block",\n                "type": "field"\n            },';
-		}
-	};
-	{ "插入路由规则: 国内域名直连 (geosite:cn -> direct)";
-		function(id){
-			winform.editCoreConfig.selText = '{\n                "domain": [\n                    "geosite:cn"\n                ],\n                "outboundTag": "direct",\n                "type": "field"\n            },';
-		}
-	};
-	{ "插入路由规则: 国内IP直连 (geoip:cn -> direct)";
-		function(id){
-			winform.editCoreConfig.selText = '{\n                "ip": [\n                    "geoip:cn",\n                    "geoip:private"\n                ],\n                "outboundTag": "direct",\n                "type": "field"\n            },';
-		}
-	};
-	{ /*---分隔线---*/ };
-	{ "重置为默认内核配置";
-		function(id){  
-			winform.editCoreConfig.text = string.crlf( string.load("\forms\main\config\coreConfigs\default.json") )
-			winform.editCoreConfig.msgOk('已重置为默认内核配置。\n请在下面点击：『更新内核配置』启用新的配置。',1300)
-		} 
-	}; 
-	{ "重置为启用路由规则默认内核配置";
-		function(id){  
-			winform.editCoreConfig.text = string.crlf( string.load("\forms\main\config\coreConfigs\v2ray.rules.json") )
-			import v2ray.core.rules;
-			var versionTag = v2ray.core.rules.check();
-			if(versionTag) winform.editCoreConfig.msgOk('已重置为启用路由规则默认内核配置，\n已下载路由规则数据最新版本：' + versionTag+ '\n\n请在下面点击：『更新内核配置』启用新的配置。',2000)
-			else winform.msgOk('已重置为启用路由规则默认内核配置，\n请在下面点击：『更新内核配置』启用新的配置。',1300)
-		} 
-	};  
-	{ "恢复到当前正在使用的内核配置";
-		function(id){   
-			winform.editCoreConfig.text = config.core.customText 
-				|| string.crlf( string.load("\forms\main\config\coreConfigs\default.json") )
-				|| web.json.stringify( config.core.default,true );
-
-			winform.editCoreConfig.msgOk('已恢复到当前正在使用的内核配置',1300)
-		} 
-	}; 
-} )
+    { "重置 sing-box 默认配置"; function(){
+        winform.editCoreConfig.text=string.crlf(string.load("/forms/main/config/coreConfigs/default.json"));
+    }};
+    { "恢复已保存的 sing-box 配置"; function(){
+        winform.editCoreConfig.text=web.json.stringify(config.core.default,true);
+    }};
+});
 
 var updateInboundsText = function(txt){
 	if(!#txt) return txt;
@@ -668,19 +640,19 @@ var updateInboundsText = function(txt){
 	var socksPort, httpPort, listen;
 	for(k,ib in inbounds){
 		if(ib.tag == "proxy"){
-			socksPort = ib.port;
+			socksPort = ib.listen_port : ib.port;
 			listen = ib.listen;
 		}
 		elseif(ib.tag == "http_proxy"){
-			httpPort = ib.port;
+			httpPort = ib.listen_port : ib.port;
 		}
 	}
 	
 	if(socksPort !== null){
-		txt = string.replace(txt,`("port"\s*:\s*)\d+(\s*,[^\}]+?"tag"\s*:\s*"proxy")`, `\1` + socksPort + `\2`);
+		txt = string.replace(txt,`("listen_port"\s*:\s*)\d+(\s*,[^\}]+?"tag"\s*:\s*"proxy")`, `\1` + socksPort + `\2`);
 	}
 	if(httpPort !== null){
-		txt = string.replace(txt,`("port"\s*:\s*)\d+(\s*,[^\}]+?"tag"\s*:\s*"http_proxy")`, `\1` + httpPort + `\2`);
+		txt = string.replace(txt,`("listen_port"\s*:\s*)\d+(\s*,[^\}]+?"tag"\s*:\s*"http_proxy")`, `\1` + httpPort + `\2`);
 	}
 	if(listen){
 		txt = string.replace(txt,`("listen"\s*:\s*")[^"]+("[\s\S]*?"tag"\s*:\s*"proxy")`, `\1` + listen + `\2`);
@@ -797,130 +769,20 @@ winform.editCoreConfig.oncommand = function(id,event){
 winform.editOutbounds.limit = 0;
 winform.editCoreConfig.limit = 0;
 
-winform.btnUpdateSsrCore.skin(style.plainButton)
-winform.btnUpdateSsrCore.oncommand = function(id,event){
-	winform.btnUpdateSsrCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core.ssr;
-	var versionTag = v2ray.core.ssr.updateCore();
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateSsrCore.disabledText = null;
-		winform.msgOk("SSR Core（ ShadowsocksR-native ） 已更新到：" + versionTag,1500)
-	}
-	else {
-		winform.btnUpdateSsrCore.disabledText = null;
-	} 	
+// All protocols now share one sing-box runtime and updater.
+for(i,name in {"btnUpdateSsrCore";"btnUpdateV2RayCore";"btnUpdateNaiveCore";"btnUpdateTuicCore";"btnUpdateHysteriaCore";"btnUpdateRules"}){
+    winform[name].hide=true;
+    winform[name].oncommand=function(){};
 }
-
-winform.btnUpdateV2RayCore.skin(style.plainButton)
-winform.btnUpdateV2RayCore.oncommand = function(id,event){
-    winform.btnUpdateXrayCore.disabled = true;
-	winform.btnUpdateV2RayCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core;
-	var versionTag = v2ray.core.updateCore();
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateV2RayCore.disabledText = null;
-		winform.msgOk("已下载最新 V2Ray Core 版本：" + versionTag + '\nV2Ray 内核已切换为： V2Ray Core',1500)
-	}
-	else {
-		winform.btnUpdateV2RayCore.disabledText = null;
-		winform.msgErr("V2Ray Core 下载失败！");
-	} 
-	
-	winform.btnUpdateXrayCore.disabled = false;
-}
-
-winform.btnUpdateXrayCore.skin(style.plainButton)
-winform.btnUpdateXrayCore.oncommand = function(id,event){
-    
-    winform.btnUpdateV2RayCore.disabled = true;
-	winform.btnUpdateXrayCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core.xray;
-	var versionTag = v2ray.core.xray.updateCore();
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateXrayCore.disabledText = null;
-		winform.msgOk("已下载最新 XRay Core 版本：" + versionTag+ '\nV2Ray 内核已切换为：XRay Core',1500)
-	}
-	else {
-		winform.btnUpdateXrayCore.disabledText = null;
-		winform.msgErr("XRay Core 下载失败！");
-	} 
-	
-	winform.btnUpdateV2RayCore.disabled = false;
-}
-
-winform.btnUpdateRules.skin(style.plainButton)
-winform.btnUpdateRules.oncommand = function(id,event){
-     
-	winform.btnUpdateRules.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	 
-	import v2ray.core.rules;
-	var versionTag = v2ray.core.rules.update();
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateRules.disabledText = null;
-		winform.msgOk('已下载路由规则到最新版本：' + versionTag+ '\n请在下面的配置编辑器点击右键,然后点击：\n『重置为启用路由规则默认内核配置』',2000)
-	}
-	else {
-		winform.btnUpdateRules.disabledText = null;
-		winform.msgErr("路由规则下载失败！");
-	}  
-}
-
-winform.btnUpdateNaiveCore.skin(style.plainButton)
-winform.btnUpdateNaiveCore.oncommand = function(id,event){
-	winform.btnUpdateNaiveCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core.naive;
-	var versionTag = v2ray.core.naive.updateCore();
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateNaiveCore.disabledText = null;
-		winform.msgOk("NaÏveProxy Core 已更新到：" + versionTag,1500)
-	}
-	else {
-		winform.btnUpdateNaiveCore.disabledText = null;
-		winform.msgErr("NaÏveProxy Core 下载失败！");
-	} 		
-}
-
-winform.btnUpdateTuicCore.skin(style.plainButton)
-winform.btnUpdateTuicCore.oncommand = function(id,event){
-	winform.btnUpdateTuicCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core.tuic;
-	var versionTag = v2ray.core.tuic.updateCore(winform);
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateTuicCore.disabledText = null;
-		winform.msgOk("TUIC Core（ tuic-client ） 已更新到：" + versionTag,1500)
-	}
-	else {
-		winform.btnUpdateTuicCore.disabledText = null;
-		winform.msgErr("TUIC Core 下载失败！");
-	} 		
-}
-
-winform.btnUpdateHysteriaCore.skin(style.plainButton)
-winform.btnUpdateHysteriaCore.oncommand = function(id,event){
-	winform.btnUpdateHysteriaCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	
-	import v2ray.core.hysteria;
-	var versionTag = v2ray.core.hysteria.updateCore(winform);
-	if( versionTag ){
-		publish("uiCommand.restartV2RayCore");
-		winform.btnUpdateHysteriaCore.disabledText = null;
-		winform.msgOk("Hysteria Core（ hysteria.exe ） 已更新到：" + versionTag,1500)
-	}
-	else {
-		winform.btnUpdateHysteriaCore.disabledText = null;
-		winform.msgErr("Hysteria Core 下载失败！");
-	} 		
+winform.btnUpdateXrayCore.text="更新 sing-box";
+winform.btnUpdateXrayCore.skin(style.plainButton);
+winform.btnUpdateXrayCore.oncommand=function(){
+    winform.btnUpdateXrayCore.disabled=true;
+    import v2ray.core;
+    var tag=v2ray.core.updateCore();
+    winform.btnUpdateXrayCore.disabled=false;
+    if(tag) winform.msgOk("sing-box " + tag,1500);
+    else winform.msgErr("sing-box 更新失败，请查看日志。");
 }
 
 if(!_WIN10_LATER){

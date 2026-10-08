@@ -1,5 +1,6 @@
 # aardio build and publish outputs
 /.build/
+/.local/
 /build/
 /publish/
 /dist/
@@ -18,6 +19,7 @@
 
 # Downloaded cores and runtime directories
 /xray-core/
+/sing-box/
 /v2ray-core/
 /tuic-core/
 /naive-core/
@@ -31,6 +33,7 @@
 # Logs and local configurations
 *.log
 /config.json
+/sing-box-config.json
 /proxy.table
 /core.table
 /ui.table

@@ -1,6 +1,6 @@
 
 WinXray 是一个 Windows 平台上非常好用的轻量代理客户端，原版版本号开发到 3.8（原地址已失效）。  
-本项目在原有基础上持续修复与演进，全面适配新版 Xray-core、REALITY、Hysteria 2、TUIC 等主流协议，提升稳定性和交互体验。
+当前开发版已统一使用 sing-box，支持 REALITY、Hysteria 2、TUIC 等协议。内核安装、旧配置迁移及验证方式见 [SING-BOX.md](SING-BOX.md)。下方历史更新记录描述的是此前版本。
 
 ---
 
@@ -145,41 +145,13 @@ IP 段代理规则：
 <span style="color:green">Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WinHttpAutoProxySvc</span>
 将 start 的值改为 2， 也就是将 WinHttpAutoProxySvc 服务改为自动启动，然后重启计算机即可。
 
-# Core 默认路径与下载地址
+# sing-box
 
-可在「 winXray / 配置 / Core配置 」一键下载更新各核心。找不到会自动在线下载，也可以手动下载放入对应目录：
+将 `sing-box.exe` 放在程序目录的 `sing-box/` 文件夹。程序生成 `sing-box-config.json`，校验后启动。配置页只保留 sing-box 更新入口。
 
-### 1. Xray Core
-- **查找目录**：`./xray-core/` 或 `./v2ray-core/` 或 `%localappdata%\winXray\core`
-- **最新版本发布**：https://github.com/XTLS/Xray-core/releases
-- ⚠️ **特别提示（推荐兼容版本：v25.1.1）**：
-  较新版本的 Xray-core 逐步废弃并移除了 TLS 配置中的 `allowInsecure` 选项（改用证书哈希绑定等机制，直接配置可能导致内核启动报错）。如果您的节点使用了自签名证书，或需要保持对 `allowInsecure` 选项的完整兼容，推荐使用经过实测兼容稳定的 **[Xray-core v25.1.1](https://github.com/XTLS/Xray-core/releases/tag/v25.1.1)**：
-  - [Xray-windows-64.zip (v25.1.1 64位下载)](https://github.com/XTLS/Xray-core/releases/download/v25.1.1/Xray-windows-64.zip)
-  - [Xray-windows-32.zip (v25.1.1 32位下载)](https://github.com/XTLS/Xray-core/releases/download/v25.1.1/Xray-windows-32.zip)
-  解压后将 `xray.exe` 放入 `./xray-core/` 目录即可。
+旧配置迁移、协议支持范围及验证方式见 [SING-BOX.md](SING-BOX.md)。
 
-### 2. Hysteria 2 Core (hysteria)
-- **查找目录**：`./hysteria-core/` 或 `%localappdata%\winXray\hysteria-core`（亦支持直接放在软件同级目录）
-- **项目仓库**：https://github.com/apernet/hysteria
-- **Releases 发布页**：https://github.com/apernet/hysteria/releases
-- **Windows 下载直链**：
-  - [64位：hysteria-windows-amd64.exe](https://github.com/apernet/hysteria/releases/latest/download/hysteria-windows-amd64.exe)
-  - [32位：hysteria-windows-386.exe](https://github.com/apernet/hysteria/releases/latest/download/hysteria-windows-386.exe)
-  下载后重命名为 `hysteria.exe` 保存到 `./hysteria-core/` 目录即可。
-
-### 3. TUIC Core (tuic-client)
-- **查找目录**：`./tuic-core/` 或 `%localappdata%\winXray\tuic-core`（亦支持直接放在软件同级目录）
-- **项目仓库**：https://github.com/Itsusinn/tuic
-- **Releases 发布页**：https://github.com/Itsusinn/tuic/releases
-- **Windows 下载直链**：
-  - [64位：tuic-client-x86_64-windows.exe](https://github.com/Itsusinn/tuic/releases/download/v2.0.0-dev7/tuic-client-x86_64-windows.exe)
-  - [32位：tuic-client-i686-windows.exe](https://github.com/Itsusinn/tuic/releases/download/v2.0.0-dev7/tuic-client-i686-windows.exe)
-  下载后重命名为 `tuic-client.exe` 保存到 `./tuic-core/` 目录即可。
-
-### 4. SSR Core
-- **查找目录**：`./v2ray-core/ssr-core` 或 `%localappdata%\winXray\ssr-core`
-
-### 5. NaïveProxy Core
+# 5. NaïveProxy Core
 - **查找目录**：`./v2ray-core/naive-core` 或 `%localappdata%\winXray\naive-core`
 - **Releases 发布页**：https://github.com/klzgrad/naiveproxy/releases
 

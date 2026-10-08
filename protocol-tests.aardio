@@ -28,40 +28,58 @@ var legacy = "ss://" + crypt.encodeBin("aes-128-gcm:server:user@example.com:443"
 parsed = v2ray.outbounds.importFromString(legacy);
 assert(#parsed == 1 && parsed[1].security == "aes-128-gcm" && parsed[1].id == "server:user");
 
-// Isolate configuration generation from the user's persisted application settings.
-config = {core={default={inbounds={{tag="proxy";protocol="socks";port=1080};{tag="http_proxy";protocol="http";port=1081}};outbounds={{tag="proxy";protocol="freedom"}}}}};
-assert(table.isArrayLike(config.core.default.outbounds));
-assert(table.isArrayLike(config.core.default.inbounds));
-var source = string.load("/lib/v2ray/core/configJson.aardio");
-source = string.replace(source,"@import config;", "");
-loadcodex(source);
-var node = {protocol="vless";address="example.com";port=443;id="00000000-0000-4000-8000-000000000001";tls="reality";password="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";sni="www.example.com";flow="";mldsa65Verify="test-verification-key"};
-assert(v2ray.outbounds.validOutbound(node));
-assert(node.id == "00000000-0000-4000-8000-000000000001" && node.password === null);
-var path = io.fullpath("/.local/protocol-test-config.json");
-v2ray.core.configJson.write(path,node,1080,1081);
-var configOut = web.json.parse(string.load(path)).outbounds[1];
-assert(!#configOut.settings.vnext[1].users[1].flow);
-assert(configOut.streamSettings.realitySettings.publicKey == node.publicKey);
-assert(configOut.streamSettings.realitySettings.password == node.publicKey);
-assert(configOut.streamSettings.realitySettings.mldsa65Verify == node.mldsa65Verify);
-assert(configOut.mux === null);
-node.flow = "xtls-rprx-vision";
-v2ray.core.configJson.write(path,node,1080,1081);
-configOut = web.json.parse(string.load(path)).outbounds[1];
-assert(configOut.settings.vnext[1].users[1].flow == node.flow);
-
-// Preserve valid base64url keys ending in s through import and config generation.
-var realityKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAs";
-parsed = v2ray.outbounds.importFromString("vless://00000000-0000-4000-8000-000000000001@example.com:443?encryption=none&security=reality&pbk=" + realityKey + "&sid=9ae17ec6245cd6b5&sni=www.example.com&type=tcp#test");
-assert(#parsed == 1 && parsed[1].publicKey == realityKey);
-v2ray.core.configJson.write(path,parsed[1],1080,1081);
-configOut = web.json.parse(string.load(path)).outbounds[1];
-assert(configOut.streamSettings.realitySettings.publicKey == realityKey);
-assert(configOut.streamSettings.realitySettings.password == realityKey);
-node.publicKey = "\t " + realityKey + " \r\n";
-v2ray.core.configJson.write(path,node,1080,1081);
-configOut = web.json.parse(string.load(path)).outbounds[1];
-assert(configOut.streamSettings.realitySettings.password == realityKey);
-console.log("Protocol regression tests passed.");
+// Isolate configuration generation from persisted user settings.
+import process.popen;
+config={core={default=web.json.parse(string.load("/forms/main/config/coreConfigs/default.json"))}};
+loadcodex(string.load("/lib/v2ray/core/singBoxJson.aardio"));
+var nativeTemplate=table.clone(config.core.default);
+// Rule downloads are not needed for these offline schema checks.
+config.core.default.route={final="proxy"};
+var core=io.exist("/WinXray/sing-box/sing-box.exe") : io.exist("/sing-box/sing-box.exe");
+assert(core,"sing-box.exe not found");
+var path=io.fullpath("/.local/protocol-test-config.json");
+var base={address="example.com";port=443;id="00000000-0000-4000-8000-000000000001"};
+var cases={
+    {protocol="vless";tls="reality";publicKey="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAs";shortId="9ae17ec6245cd6b5";sni="www.example.com";flow="xtls-rprx-vision";network="tcp";type="tcp"};
+    {protocol="vmess";security="auto";network="ws";path="/test";tls="tls"};
+    {protocol="trojan";id="test-password";tls="tls"};
+    {protocol="shadowsocks";security="2022-blake3-aes-128-gcm";id="AAAAAAAAAAAAAAAAAAAAAA==:AAAAAAAAAAAAAAAAAAAAAA=="};
+    {protocol="http";user="test";password="secret"};
+    {protocol="socks";user="test";password="secret"};
+    {protocol="tuic";password="test-password"};
+    {protocol="hysteria2";password="test-password"};
+    {protocol="hysteria";password="test-password";up_mbps=10;down_mbps=50};
+    {protocol="naive";user="test";password="secret"}
+};
+for(i,fields in cases){
+    var node=table.clone(base);table.assign(node,fields);
+    var saved,err=v2ray.core.singBoxJson.write(path,node,1080,1082);
+    assert(saved,err);
+    var json=web.json.parse(string.load(path));
+    assert(json.inbounds[1].type=="socks" && json.inbounds[1].listen_port==1080);
+    assert(json.inbounds[2].type=="http" && json.inbounds[2].listen_port==1082);
+    assert(!json.inbounds[1].port && json.outbounds[1].type==node.protocol);
+    if(node.protocol=="vless"){
+        assert(json.outbounds[1].tls.reality.public_key==node.publicKey);
+        assert(json.outbounds[1].tls.reality.short_id==node.shortId);
+        assert(json.outbounds[1].flow==node.flow);
+    }
+    var checker=process.popen(core,{"check";"-c";path});assert(checker);
+    var done,out,stderr,exitCode=checker.waitOne(10000);
+    if(done) checker.close();else checker.terminate();
+    assert(done && exitCode==0,string.concat(node.protocol," ",out,stderr));
+}
+var invalid,err=v2ray.core.singBoxJson.outboundConfig({protocol="ssr"});
+assert(!invalid && err);
+invalid,err=v2ray.core.singBoxJson.outboundConfig({protocol="vless";network="kcp"});
+assert(!invalid && err);
+var legacy={inbounds={{protocol="socks";tag="proxy";port=1080};{protocol="http";tag="http_proxy";port=1082}};outbounds={{tag="proxy"};{protocol="freedom";tag="direct"};{protocol="blackhole";tag="block"}};routing={rules={{ip={"geoip:cn";"geoip:private"};outboundTag="direct";type="field"};{domain={"geosite:cn"};outboundTag="direct";type="field"}}}};
+var migrated,err=v2ray.core.singBoxJson.template(legacy);assert(migrated,err);
+assert(migrated.inbounds[1].listen_port==1080);
+assert(#migrated.route.rules==3 && #migrated.route.rule_set==2);
+assert(migrated.route.rules[2].ip_is_private);
+assert(migrated.route.rule_set[1].tag=="geoip-cn");
+legacy.dns={servers={"1.1.1.1"}};
+invalid,err=v2ray.core.singBoxJson.template(legacy);assert(!invalid && err);
+console.log("sing-box protocol regression tests passed.");
 console.pause();

@@ -66,126 +66,29 @@ if(!config.proxy.hotkey){
 	config.proxy.hotkey = {1/*_MOD_ALT*/|2/*_MOD_CONTROL*/|4/*_MOD_SHIFT*/;'P'#}
 }
 
+import web.json;
 config.__resetDefaultCore = function(){
-	config.core.customText = null;
-	config.core.default =  {
-		inbounds={
-			{
-				listen="127.0.0.1";
-				port=0;
-				protocol="socks";
-				settings={
-					auth="noauth";
-					udp=true;
-				};
-				sniffing={
-					destOverride={
-						"http";
-						"tls"
-					};
-					enabled=true;
-					routeOnly=true;
-				};
-				tag="proxy";
-			}; 
-			{
-				listen="127.0.0.1";
-				port=0;
-				protocol="http";
-				settings={};
-				sniffing={
-					destOverride={
-						"http";
-						"tls"
-					};
-					enabled=true;
-					routeOnly=true;
-				};
-				tag="http_proxy"
-			}
-		};
-		log={
-			access="";
-			error="";
-			loglevel="warning"
-		};
-		outbounds={
-			{
-				tag="proxy"
-			};
-			{
-				protocol="freedom";
-				settings={};
-				tag="direct";
-			};
-			{
-				protocol="blackhole";
-				settings={
-					response={
-						type="http"
-					};
-				};
-				tag="block";
-			}
-		};
-		routing={
-			domainStrategy="IPIfNonMatch";
-			rules={
-				{
-					inboundTag={
-						"api"
-					};
-					outboundTag="api";
-					type="field";
-				};
-				{
-					domain={
-						"geosite:cn"
-					};
-					outboundTag="direct";
-					type="field";
-				};
-				{
-					ip={
-						"geoip:cn";
-						"geoip:private"
-					};
-					outboundTag="direct";
-					type="field";
-				}
-			}
-		};
-	}	
+    config.core.customText=null;
+    config.core.default=web.json.parse(string.load("/forms/main/config/coreConfigs/default.json") : $"/forms/main/config/coreConfigs/default.json");
 }
 
 if(!config.core.default){
 	config.__resetDefaultCore();
 }
 
-if(!config.core.default.inbounds[2]){
-	config.core.default.inbounds[2]	= {
-		listen="127.0.0.1";
-		port=0;
-		protocol="http";
-		settings={};
-		sniffing={
-			destOverride={
-				"http";
-				"tls"
-			};
-			enabled=true;
-			routeOnly=true;
-		};
-		tag="http_proxy"
-	}
+// Migrate saved Xray templates once, retaining their original text for recovery.
+import v2ray.core.singBoxJson;
+if(config.core.default.inbounds && config.core.default.inbounds[1] && !config.core.default.inbounds[1].type){
+    var converted,err=v2ray.core.singBoxJson.template(config.core.default);
+    if(converted){
+        if(!config.core.legacyXrayText) config.core.legacyXrayText=config.core.customText : web.json.stringify(config.core.default,true);
+        config.core.default=converted;
+        config.core.customText=web.json.stringify(converted,true);
+        config.core.save();
+    }
 }
-
-if(config.core.default.inbounds){
-	for(i,ib in config.core.default.inbounds){
-		if(ib.sniffing && (ib.sniffing.routeOnly === null)){
-			ib.sniffing.routeOnly = true;
-		}
-	}
+if(config.core.default.inbounds && !config.core.default.inbounds[2]){
+    config.core.default.inbounds[2]={type="http";tag="http_proxy";listen="127.0.0.1";listen_port=0};
 }
 
 /**intellisense(config)

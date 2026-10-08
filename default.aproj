@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<project ver="10" name="WinXray" libEmbed="true" icon="\forms\ico\app.ico" ui="win" output="WinXray.exe" CompanyName="WinXray" FileDescription="通用代理客户端" LegalCopyright="Copyright (C) WinXray" ProductName="WinXray" InternalName="WinXray" FileVersion="3.20.0.29" ProductVersion="3.20.0.29" publishDir="\WinXray" dstrip="false" local="false">
+<project ver="10" name="WinXray" libEmbed="true" icon="\forms\ico\app.ico" ui="win" output="WinXray.exe" CompanyName="WinXray" FileDescription="通用代理客户端" LegalCopyright="Copyright (C) WinXray" ProductName="WinXray" InternalName="WinXray" FileVersion="3.20.0.30" ProductVersion="3.20.0.30" publishDir="\WinXray" dstrip="false" local="false">
 	<file name="main" path="main.aardio"/>
 	<folder name="窗体" path="forms" comment="" embed="true" local="false" ignored="false">
 		<folder name="ico" path="forms\ico" comment="forms\ico">
@@ -31,10 +31,10 @@
 			</folder>
 		</folder>
 	</folder>
-	<folder name="v2RayCore" path="v2ray-core" comment="" embed="false" local="false" ignored="false">
-		<file name="LICENSE" path="v2ray-core\LICENSE" comment="v2ray-core\LICENSE"/>
-		<file name="v2ctl.exe" path="v2ray-core\v2ctl.exe" comment="v2ray-core\v2ctl.exe"/>
-		<file name="v2ray.exe" path="v2ray-core\v2ray.exe" comment="v2ray-core\v2ray.exe"/>
+	<folder name="sing-box" path="sing-box" comment="sing-box runtime" embed="false" local="false" ignored="false">
+		<file name="sing-box.exe" path="sing-box\sing-box.exe" comment="sing-box runtime"/>
+	</folder>
+	<folder name="默认节点" path="v2ray-core" comment="" embed="false" local="false" ignored="false">
 		<file name="winXray-default-servers.json" path="v2ray-core\winXray-default-servers.json" comment="v2ray-core\winXray-default-servers.json"/>
 	</folder>
 </project>

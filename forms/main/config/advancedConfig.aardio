@@ -102,8 +102,8 @@ var onInboundsUpdated = function(){
 		} 
 	}
 		
-	winform.editSocksPort.text = v2ray.core.socksProxyPort || socksInbounds[["port"]] || 1080;
-	winform.editHttpPort.text = v2ray.core.httpProxyPort || httpInbounds[["port"]] || 1082;
+	winform.editSocksPort.text = v2ray.core.socksProxyPort || (socksInbounds.listen_port : socksInbounds.port) || 1080;
+	winform.editHttpPort.text = v2ray.core.httpProxPort || (httpInbounds.listen_port : httpInbounds.port) || 1082;
 	winform.chkLan.checked = socksInbounds[["listen"]] !== "127.0.0.1";
 	winform.btnOpenFirewall.disabled = !winform.chkLan.checked;
 }
@@ -200,13 +200,13 @@ winform.btnUpdate.oncommand = function(id,event){
 	}
 	
 	var port = tonumber(winform.editSocksPort.text) 
-	socksInbounds["port"]  = port;
+	if(socksInbounds.type) socksInbounds.listen_port=port;else socksInbounds.port=port;
 	if(port!=oldPort){ 
 		restartCore = true;
 	}	
 	
 	var port = tonumber(winform.editHttpPort.text) 
-	httpInbounds["port"]  = port;
+	if(httpInbounds.type) httpInbounds.listen_port=port;else httpInbounds.port=port;
 	if(port!=oldHttpPort){
 		restartCore = true;
 	}		

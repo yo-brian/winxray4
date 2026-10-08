@@ -34,9 +34,13 @@ var activeOutboundToken = 0;
 var retryOnNetworkAliveTimerId;
 frmXray.userStopped = true;
 frmXray.tcpingConnectTimerId = null;
+frmXray.isStartCancelled = function(token){
+    return frmXray.userStopped || token != activeOutboundToken;
+}
 
-var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTesting){
+var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTesting,skipProbe){
 	frmXray.userStopped = false;
+	frmXray.manualUnchecked = skipProbe === true;
 	activeOutboundToken++;
 	var currentToken = activeOutboundToken;
 	
@@ -60,7 +64,7 @@ var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTes
 		var started,err = v2ray.core.restart(frmXray.edit,outbound);
 		startTesting = started;
 		if(!started){
-			frmXray.edit.print("启动 Xray 错误",err:""); 
+			frmXray.edit.print("启动 sing-box 错误",err:"");
 			frmXray.btnTcping.disabledText = null;
 			return false;
 		}
@@ -68,16 +72,25 @@ var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTes
 
 	if( startTesting  ){
 		currentOutboundIndex,currentOutboundAddress = outboundIndex,outboundAddress;
+		if(skipProbe){
+			frmXray.onStartXrayComplete(outboundIndex,false,outboundAddress,currentToken,true);
+			return true;
+		}
 		frmXray.autoTesting = true;
 		
 		..thread.invoke( 
 			function(frmXray,outboundIndex,outboundAddress,sockProxyPort,httpProxyAddress,enableRetry,timerTesting,token){
+				import time;
+				var probeTick = time.tick();
 				import web.rest.client;
 				var restClient = web.rest.client(,httpProxyAddress);
 				restClient._http.setTimeouts(1000,2000,2000);
 				var ret = restClient.get("https://www.google.com/generate_204");
 				var lastStatusCode = restClient.lastStatusCode;
+				frmXray.edit.print("Google 连通检测耗时：" + (time.tick() - probeTick) + " 毫秒");
+				probeTick = time.tick();
 				
+				if(frmXray.isStartCancelled(token)){ restClient.close(); return; }
 				if( lastStatusCode == 204 ){
 					frmXray.onStartXrayComplete(outboundIndex,timerTesting,outboundAddress,token); 
 					return;	
@@ -93,7 +106,10 @@ var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTes
 				http.setTimeouts(1000,1000,1000);
 				var isAlive = http.get("http://www.msftconnecttest.com/connecttest.txt")=="Microsoft Connect Test";
 				http.close();	 
+				frmXray.edit.print("微软连通检测耗时：" + (time.tick() - probeTick) + " 毫秒");
+				probeTick = time.tick();
 
+				if(frmXray.isStartCancelled(token)) return;
 				if(isAlive){
 					frmXray.onStartXrayComplete(outboundIndex,timerTesting,outboundAddress,token);
 					return;	
@@ -135,6 +151,7 @@ Accept-Charset:utf-8;
 						} 
 					}
 				};
+				frmXray.edit.print("SOCKS 连通检测耗时：" + (time.tick() - probeTick) + " 毫秒");
 				frmXray.onStartXrayFailed(outboundIndex,enableRetry,outboundAddress,token);
 			},frmXray,outboundIndex,outboundAddress, 
 			v2ray.core.socksProxyPort,v2ray.core.getSystemProxyConfig(),enableRetry,timerTesting,currentToken
@@ -162,7 +179,7 @@ frmXray.autoUpdateSubscription = function(timeout){
 		}
 } 
 
-frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddress,token){
+frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddress,token,unchecked){
 	if(frmXray.userStopped || (token && token != activeOutboundToken)){
 		return;
 	}
@@ -180,11 +197,11 @@ frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddres
 	}
 	
 	frmXray.autoTesting = false;
-	listview.setItemText("活动服务器：正常",outboundIndex,8);
+	listview.setItemText(unchecked ? "内核已启动：未检测" : "活动服务器：正常",outboundIndex,8);
 	listview.activeOutboundIndex = outboundIndex;
 
 	var address  = listview.getItemText(outboundIndex,2);
-	if(!timerTesting) frmXray.edit.print("已切换到服务器：",address);
+	if(!timerTesting) frmXray.edit.print(unchecked ? "内核已启动（未检测连通性）：" : "已切换到服务器：",address);
 	listview.activeOutboundAddress = address;
 
 	if(listview.getItemText(outboundIndex,7)=="不可用"){
@@ -243,7 +260,7 @@ frmXray.onStartXrayFailed = function(outboundIndex,enableRetry,outboundAddress,t
 	}
 	else {
 		listview.setItemText("活动服务器：异常",outboundIndex,8);
-		frmXray.edit.print("已切换到服务器：",listview.getItemText(outboundIndex,2)); 
+		frmXray.edit.print("连接失败：",listview.getItemText(outboundIndex,2));
 		frmXray.autoTesting = false;
 	} 
 	
@@ -1174,6 +1191,7 @@ frmXray.btnStopCore.oncommand = function(id,event){
 		frmXray.autoTesting = false;
 		frmXray.btnTcping.disabledText = null;
 		
+		sysProxy.switchToDirectMode();
 		v2ray.core.stop();
 		
 		frmXray.listview.activeOutboundIndex = null;
@@ -1184,7 +1202,6 @@ frmXray.btnStopCore.oncommand = function(id,event){
 		
 		..publish("activeOutbound",false);
 		
-		sysProxy.switchToDirectMode();
 		frmXray.radioProxyDirect.checked = true;
 		frmXray.radioProxyPac.checked = false;
 		frmXray.radioProxy.checked = false;
@@ -1281,6 +1298,7 @@ frmXray.chkAutoTest.oncommand = function(id,event){
 	import inet.http;
 	testTimerId = frmXray.setInterval( 
 		config.proxy.testInterval*1000,function(){
+			if(frmXray.manualUnchecked) return config.proxy.testInterval*1000;
 			if(frmXray.btnTcping.disabled) return;
 			if( frmXray.autoTesting ) return; 
 
@@ -1324,7 +1342,7 @@ frmXray.startNode = function(index){
     var node = config.proxy.outbounds[index];
     if(!node) return false;
     frmXray.listview.setSelected(index,true);
-    return activeOutbound(index,node.address,false);
+    return activeOutbound(index,node.address,false,false,true);
 }
 frmXray.stopNode = function(){
     if(v2ray.core.isRunning() || frmXray.autoTesting || frmXray.btnTcping.disabledText || frmXray.listview.activeOutboundIndex !== null){

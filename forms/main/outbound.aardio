@@ -13,7 +13,7 @@ btnInsertField={cls="plus";text="插入更多配置字段";left=10;top=0;right=1
 btnSaveOutbound={cls="plus";text="保 存";left=826;top=410;right=929;bottom=446;align="left";bgcolor=11580047;db=1;disabled=1;dr=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-13;name='FontAwesome');padding={left=22}};iconText='\uF0C7';notify=1;textPadding={left=40};z=16};
 btnUpdateCore={cls="plus";text="下载 / 更新 NaÏveProxy Core";left=637;top=61;right=979;bottom=89;align="left";color=3947580;dr=1;dt=1;font=LOGFONT(h=-13);iconStyle={align="left";font=LOGFONT(h=-17;name='FontAwesome');padding={left=18}};iconText='\uF0AB';notify=1;textPadding={left=50};z=23};
 cmbNetwork={cls="combobox";left=656;top=97;right=814;bottom=123;dr=1;dt=1;edge=1;items={"tcp";"grpc";"ws";"httpupgrade";"splithttp";"h2";"kcp";"quic"};mode="dropdown";z=13};
-cmbProtocol={cls="combobox";left=656;top=28;right=814;bottom=54;dr=1;dt=1;edge=1;items={"vmess";"vless";"trojan";"trojan-go";"hysteria2";"tuic";"ssr";"shadowsocks";"naive";"socks";"https";"http"};mode="dropdown";z=12};
+cmbProtocol={cls="combobox";left=656;top=28;right=814;bottom=54;dr=1;dt=1;edge=1;items={"vmess";"vless";"trojan";"hysteria2";"tuic";"shadowsocks";"naive";"socks";"https";"http"};mode="dropdown";z=12};
 cmbSecurity={cls="combobox";left=656;top=140;right=814;bottom=166;dr=1;dt=1;edge=1;items={"auto";"none";"chacha20-poly1305";"aes-128-gcm"};mode="dropdown";z=15};
 editAddress={cls="plus";left=656;top=183;right=878;bottom=207;align="left";bgcolor=16777215;border={bottom=1;color=-8355712};dr=1;dt=1;editable="edit";font=LOGFONT(h=-16);textPadding={bottom=1};z=2};
 editId={cls="plus";left=656;top=263;right=986;bottom=287;align="left";bgcolor=16777215;border={bottom=1;color=-8355712};clip=1;dr=1;dt=1;editable="edit";font=LOGFONT(h=-16);notify=1;textPadding={right=75;bottom=1};z=20};
@@ -857,87 +857,13 @@ winform.btnSaveOutbound.skin(style.button);
 winform.btnSaveOutbound.disabled = true;
 
 winform.btnUpdateCore.skin(style.plainButton)
-winform.btnUpdateCore.oncommand = function(id,event){ 
-	winform.btnUpdateCore.disabledText = {'\uF254';'\uF251';'\uF252';'\uF253';'\uF250'};
-	var sel = winform.cmbProtocol.selText;
-	
-	if(sel=="ssr"){
-		import v2ray.core.ssr;
-		var versionTag = v2ray.core.ssr.updateCore();
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("SSR Core（ ShadowsocksR-native ） 已更新到：" + versionTag,1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-		} 	
-	}
-	elseif(sel=="vless"){
-		import v2ray.core.xray;
-		var versionTag = v2ray.core.xray.updateCore();
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("已下载最新 XRay Core 版本：" + versionTag+ '\nV2Ray 内核已切换为：XRay Core',1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgErr("XRay Core 下载失败！");
-		} 	
-	}
-	elseif(sel=="naive"){
-		import v2ray.core.naive;
-		var versionTag = v2ray.core.naive.updateCore();
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("NaÏveProxy Core 已更新到：" + versionTag,1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgErr("NaÏveProxy Core 下载失败！");
-		} 		
-	}
-	elseif(sel=="tuic"){
-		import v2ray.core.tuic;
-		var versionTag = v2ray.core.tuic.updateCore(winform);
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("TUIC Core（ tuic-client ） 已更新到：" + versionTag,1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgErr("TUIC Core 下载失败！");
-		} 		
-	}
-	elseif(sel=="hysteria2" || sel=="hy2"){
-		import v2ray.core.hysteria;
-		var versionTag = v2ray.core.hysteria.updateCore(winform);
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("Hysteria Core（ hysteria.exe ） 已更新到：" + versionTag,1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgErr("Hysteria Core 下载失败！");
-		} 		
-	}	
-	else {
-		import v2ray.core;
-		var versionTag = v2ray.core.updateCore();
-		if( versionTag ){
-			publish("uiCommand.restartV2RayCore");
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgOk("已下载最新 Xray Core 版本：" + versionTag + '\n代理内核已切换为： Xray Core',1500)
-		}
-		else {
-			winform.btnUpdateCore.disabledText = null;
-			winform.msgErr("Xray Core 下载失败！");
-		} 
-	}
+winform.btnUpdateCore.oncommand=function(){
+    winform.btnUpdateCore.disabled=true;
+    import v2ray.core;
+    var tag=v2ray.core.updateCore();
+    winform.btnUpdateCore.disabled=false;
+    if(tag) winform.msgOk("sing-box " + tag,1500);
+    else winform.msgErr("sing-box 更新失败，请查看日志。");
 }
 
 winform.qrPicture.skin(

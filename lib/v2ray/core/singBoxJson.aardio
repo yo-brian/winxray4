@@ -1,0 +1,164 @@
+import web.json;
+namespace v2ray.core.singBoxJson;
+
+outboundConfig = function(n){
+    var p=n.protocol;
+    if(p=="hy2") p="hysteria2";
+    if(p=="https") p="http";
+    if(p=="ss") p="shadowsocks";
+    var supported={vless=1;vmess=1;trojan=1;shadowsocks=1;socks=1;http=1;tuic=1;hysteria2=1;hysteria=1;naive=1};
+    if(!supported[p]) return null,"sing-box 不支持或尚未适配此协议：" + p;
+    var ob={type=p;tag="proxy";server=n.address;server_port=tonumber(n.port)};
+    var reality=n.tls=="reality" || n.security=="reality" || #n.publicKey || #n.pbk;
+    if(n.tls=="xtls") return null,"请将旧 XTLS 节点更新为 TLS/REALITY + Vision。";
+    if(reality || n.tls=="tls" || n.protocol=="https" || p=="trojan" || p=="tuic" || p=="hysteria2" || p=="hysteria" || p=="naive"){
+        ob.tls={enabled=true;server_name=n.sni : n.address;insecure=n.allowInsecure === true};
+        if(n.alpn) ob.tls.alpn=type(n.alpn)=="table" ? n.alpn : ..string.split(n.alpn,",");
+        if(reality || n.fingerprint || n.fp) ob.tls.utls={enabled=true;fingerprint=n.fingerprint : n.fp : "chrome"};
+        if(reality){
+            var key=n.publicKey : n.pbk : n.password;
+            if(!#key) return null,"REALITY 公钥为空。";
+            if(#n.mldsa65Verify) return null,"当前适配器不支持 mldsa65Verify。";
+            ob.tls.reality={enabled=true;public_key=..string.trim(key);short_id=n.shortId : n.sid : ""};
+            ob.tls.insecure=false;
+        }
+    }
+    if(p=="vless" || p=="vmess"){
+        ob.uuid=n.id;
+        if(p=="vless"){
+            if(#n.security && n.security!="none" && n.security!="auto" && n.security!="reality") return null,"不支持此 VLESS encryption。";
+            if(#n.flow) ob.flow=n.flow;
+        }
+        else { ob.security=n.security : "auto";ob.alter_id=tonumber(n.aid) : 0; }
+    }
+    elseif(p=="shadowsocks"){ ob.method=n.security;ob.password=n.id; }
+    elseif(p=="trojan") ob.password=n.password : n.id;
+    elseif(p=="http" || p=="socks" || p=="naive"){
+        ob.username=n.user;ob.password=n.password : n.passwd;
+        if(!ob.username && #n.id){
+            var user,password=..string.match(n.id,"([^\:]+)\:(.+)");
+            ob.username=user;if(!ob.password) ob.password=password;
+        }
+        if(p=="socks") ob.version="5";
+    }
+    elseif(p=="tuic"){
+        var user,password=..string.match(n.id : "","([^\:]+)\:(.+)");
+        ob.uuid=n.uuid : n.user : user : n.id;ob.password=n.password : n.passwd : password;
+        ob.congestion_control=n.congestion_control : n.congestionController : "bbr";
+        ob.udp_relay_mode=n.udp_relay_mode : "native";
+    }
+    elseif(p=="hysteria2"){
+        ob.password=n.auth : n.password : n.id;
+        if(n.user && n.password) ob.password=n.user + ":" + n.password;
+        ob.up_mbps=tonumber(n.up_mbps : n.upmbps);ob.down_mbps=tonumber(n.down_mbps : n.downmbps);
+        if(n.obfs && n.obfs!="none"){
+            if(type(n.obfs)!="string" || n.obfs!="salamander") return null,"暂不支持此 Hysteria2 混淆。";
+            ob.obfs={type="salamander";password=n.obfsPassword : n.obfs_password : n["obfs-password"]};
+        }
+        if(n.ports || n.port_hopping || n.mport) return null,"端口跳跃需在 sing-box 模板中手动配置。";
+    }
+    elseif(p=="hysteria"){
+        ob.auth_str=n.auth : n.password : n.id;
+        ob.up_mbps=tonumber(n.up_mbps : n.upmbps);ob.down_mbps=tonumber(n.down_mbps : n.downmbps);
+    }
+    if(p=="vless" || p=="vmess" || p=="trojan"){
+        var net=n.network : "tcp";
+        if(net=="ws") ob.transport={type="ws";path=n.path : "/";headers=n.host ? {Host=n.host} : null};
+        elseif(net=="grpc") ob.transport={type="grpc";service_name=n.serviceName : n.path : ""};
+        elseif(net=="http" || net=="h2") ob.transport={type="http";host=n.host ? {n.host} : null;path=n.path : "/"};
+        elseif(net!="tcp" && net!="raw") return null,"未适配的 sing-box 传输：" + net;
+        elseif(n.type && n.type!="none" && n.type!="tcp" && n.type!="raw") return null,"sing-box 不支持 TCP headerType：" + n.type;
+    }
+    return ob;
+}
+
+template = function(source){
+    if(!source || !..table.isArrayLike(source.inbounds) || !..table.isArrayLike(source.outbounds)) return null,"内核配置缺少 inbounds/outbounds 数组。";
+    if(source.inbounds && source.inbounds[1] && source.inbounds[1].type) return ..table.clone(source);
+    if(source.dns) return null,"请将旧 Xray DNS 配置手动转换为 sing-box 格式。";
+    var result={log={level="info"};inbounds={};outbounds={{type="direct";tag="direct"}};route={rules={};rule_set={};final="proxy"}};
+    var sets={};
+    var addSet=function(kind,name){
+        var tag=kind + "-" + name;
+        if(!sets[tag]){
+            sets[tag]=true;
+            ..table.push(result.route.rule_set,{type="remote";tag=tag;format="binary";url="https://raw.githubusercontent.com/SagerNet/sing-" + kind + "/rule-set/" + tag + ".srs"});
+        }
+        return tag;
+    }
+    for(i,ib in source.inbounds){
+        if(ib.protocol!="socks" && ib.protocol!="http") return null,"请手动迁移自定义入站。";
+        if(ib.settings && ((ib.settings.auth && ib.settings.auth!="noauth") || ib.settings.accounts)) return null,"请手动迁移入站认证配置。";
+        ..table.push(result.inbounds,{type=ib.protocol;tag=ib.tag;listen=ib.listen : "127.0.0.1";listen_port=ib.port : 0});
+        if(ib.sniffing && ib.sniffing.enabled && !result.route.rules[1]) ..table.push(result.route.rules,{action="sniff"});
+    }
+    for(i,ob in source.outbounds){
+        if(ob.tag!="proxy" && ob.protocol!="freedom" && ob.protocol!="blackhole") return null,"请手动迁移自定义出站：" + ob.tag;
+        if(ob.protocol=="freedom" && ob.settings && (ob.settings.redirect || ob.settings.domainStrategy || ob.settings.fragment)) return null,"自定义 freedom 设置需要手动迁移。";
+    }
+    if(source.routing){
+        for(i,old in source.routing.rules){
+            if(old.outboundTag=="api") continue;
+            var allowed={type=1;outboundTag=1;domain=1;ip=1;port=1;network=1;inboundTag=1;protocol=1};
+            for(k,v in old){ if(!allowed[k]) return null,"无法自动迁移路由字段：" + k; }
+            var rule={action=old.outboundTag=="block" ? "reject" : "route";outbound=old.outboundTag=="block" ? null : old.outboundTag};
+            if(old.domain){
+                for(j,value in old.domain){
+                    if(..string.startWith(value,"geosite:")){
+                        if(!rule.rule_set) rule.rule_set={};..table.push(rule.rule_set,addSet("geosite",..string.right(value,-9)));
+                    }
+                    else {
+                        var key="domain_keyword",text=value;
+                        if(..string.startWith(value,"full:")){ key="domain";text=..string.right(value,-6); }
+                        elseif(..string.startWith(value,"domain:")){ key="domain_suffix";text=..string.right(value,-8); }
+                        elseif(..string.startWith(value,"keyword:")) text=..string.right(value,-9);
+                        elseif(..string.startWith(value,"regexp:")){ key="domain_regex";text=..string.right(value,-8); }
+                        if(!rule[key]) rule[key]={};..table.push(rule[key],text);
+                    }
+                }
+            }
+            if(old.ip){
+                if(old.domain || old.port || old.network || old.inboundTag || old.protocol) return null,"混合 IP 路由条件需手动迁移。";
+                for(j,value in old.ip){
+                    var item=..table.clone(rule);
+                    if(value=="geoip:private") item.ip_is_private=true;
+                    elseif(..string.startWith(value,"geoip:")) item.rule_set={addSet("geoip",..string.right(value,-7))};
+                    else item.ip_cidr={value};
+                    ..table.push(result.route.rules,item);
+                }
+                continue;
+            }
+            if(old.port){
+                rule.port={};rule.port_range={};
+                for(j,value in ..string.split(tostring(old.port),",")){
+                    if(..string.indexOf(value,"-")) ..table.push(rule.port_range,..string.replace(value,"@-",":"));
+                    else ..table.push(rule.port,tonumber(value));
+                }
+                if(!#rule.port) rule.port=null;if(!#rule.port_range) rule.port_range=null;
+            }
+            if(old.network) rule.network=..string.split(old.network,",");
+            rule.inbound=old.inboundTag;rule.protocol=old.protocol;
+            ..table.push(result.route.rules,rule);
+        }
+    }
+    if(!#result.route.rule_set) result.route.rule_set=null;
+    if(!#result.route.rules) result.route.rules=null;
+    return result;
+}
+
+write = function(path,node,socksPort,httpPort){
+    var ob,err=outboundConfig(node);if(!ob) return null,err;
+    var current,err=template(..config.core.default);if(!current) return null,err;
+    var socks,http;
+    for(i,ib in current.inbounds){
+        if(ib.tag=="proxy"){ ib.listen_port=socksPort;ib.port=null;socks=true; }
+        elseif(ib.tag=="http_proxy"){ ib.listen_port=httpPort;ib.port=null;http=true; }
+    }
+    if(!socks || !http) return null,"配置缺少 proxy / http_proxy 入站。";
+    var outbounds={ob};
+    for(i,item in current.outbounds){ if(item.tag!="proxy") ..table.push(outbounds,item); }
+    current.outbounds=outbounds;
+    if(!current.route) current.route={};current.route.final="proxy";
+    if(!..string.save(path,..web.json.stringify(current,true,false))) return null,"无法写入 sing-box 配置。";
+    return path;
+}
