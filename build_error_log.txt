@@ -3,7 +3,7 @@ H:\code\winxray4\forms\main\home.aardio
 错误信息---------------:
 
 {Error}:
-{Line}:#119
+{Line}:#217
 {File}:H:\code\winxray4\forms\main\home.aardio
 {Error}:
 {Expected}:'<name>'

@@ -29,6 +29,9 @@ var preferredMode = config.proxy.mode == "proxy" ? "proxy" : "pac";
 var signature;
 var refreshing = false;
 var connected = false;
+var measuringLatency = false;
+var latencyRequestToken = 0;
+var latencyNode;
 var updateControl = function(control,property,value){
     if(control[property] !== value) control[property] = value;
 }
@@ -87,8 +90,8 @@ winform.refresh = function(){
     var node = config.proxy.outbounds[selectedHomeIndex];
     updateControl(winform.nodes,"text",node ? (node.ps : node.address) + "  ·  " + (node.protocol : "") + "   ▾" : "点击选择节点");
     updateControl(winform.nodes,"disabled",starting ? true : false);
-    updateControl(winform.testLatency,"disabled",(!node || starting) ? true : false);
-    updateControl(winform.testLatency,"text",starting ? "测速连接中…" : "测延时并连接");
+    updateControl(winform.testLatency,"disabled",(!node || starting || measuringLatency) ? true : false);
+    updateControl(winform.testLatency,"text",measuringLatency ? "测速中…" : "测延时");
     var speed = node ? controller.listview.getItemText(selectedHomeIndex,7);
     updateControl(winform.latency,"text","TCP 延时：" + (#speed ? speed : "未测速"));
     var info = node && node.subscribeUrl && config.proxy.subscriptionInfo ? config.proxy.subscriptionInfo[node.subscribeUrl];
@@ -130,7 +133,8 @@ winform.nodes.oncommand = function(){
         search={cls="edit";left=18;top=18;right=510;bottom=48;edge=1;z=1};
         group={cls="combobox";left=525;top=18;right=742;bottom=48;mode="dropdown";edge=1;z=2};
         rows={cls="listview";left=18;top=62;right=742;bottom=397;edge=1;fullRow=1;gridLines=1;z=3};
-        hint={cls="static";text="搜索名称、地址或协议；双击节点即可选择";left=18;top=417;right=545;bottom=445;transparent=1;z=4};
+        hint={cls="static";text="搜索名称、地址或协议；双击节点即可选择";left=18;top=417;right=402;bottom=445;transparent=1;z=4};
+        measureAll={cls="button";text="测全部延时";left=412;top=412;right=542;bottom=447;z=7};
         choose={cls="button";text="选择节点";left=552;top=412;right=652;bottom=447;z=5};
         cancel={cls="button";text="取消";left=662;top=412;right=742;bottom=447;z=6}
     );
@@ -140,7 +144,9 @@ winform.nodes.oncommand = function(){
     dialog.rows.insertColumn("协议",90);
     dialog.rows.insertColumn("延时",95);
     dialog.rows.insertColumn("状态",110);
-    var groups={"全部订阅"},groupUrls={"*"},groupNames={};
+    var groups={"全部订阅"};
+    var groupUrls={"*"};
+    var groupNames={};
     for(i=1;#config.proxy.outbounds){
         var node=config.proxy.outbounds[i];
         var url=node.subscribeUrl : "";
@@ -155,6 +161,10 @@ winform.nodes.oncommand = function(){
     }
     dialog.group.items=groups;dialog.group.selIndex=1;
     var displayed={};
+    var batchToken=0;
+    var batchActive=false;
+    var batchNodes={};
+    var batchCompleted=0;
     var renderRows=function(){
         var query=string.lower(string.trim(dialog.search.text));
         var group=groupUrls[dialog.group.selIndex] : "*";
@@ -184,17 +194,107 @@ winform.nodes.oncommand = function(){
         if(!index){ renderRows();return; }
         dialog.close();selectHomeNode(index);
     }
-    dialog.rows.onnotify=function(id,code){ if(code==-3/*_NM_DBLCLK*/) dialog.choose.oncommand(); }
+    dialog.rows.onDoubleClick=function(row){
+        if(!displayed[row]) return;
+        dialog.rows.selIndex=row;
+        dialog.choose.oncommand();
+    }
+    dialog.isLatencyBatchActive=function(token){ return batchActive && token==batchToken; }
+    dialog.onBatchLatency=function(token,slot,text){
+        if(!batchActive || token!=batchToken) return;
+        var node=batchNodes[slot];
+        for(i=1;#config.proxy.outbounds){
+            if(config.proxy.outbounds[i]===node){
+                mainForm.proxyController.listview.setItemText(text,i,7);break;
+            }
+        }
+        for(i=1;#displayed){
+            if(displayed[i]===node){ dialog.rows.setItemText(text,i,4);break; }
+        }
+        batchCompleted++;
+        dialog.measureAll.text="停止测速 " + batchCompleted + "/" + #batchNodes;
+        if(batchCompleted==#batchNodes){ batchActive=false;dialog.measureAll.text="测全部延时"; }
+        winform.refresh();
+    }
+    dialog.measureAll.oncommand=function(){
+        if(batchActive){ batchActive=false;batchToken++;dialog.measureAll.text="测全部延时";return; }
+        batchNodes={};batchCompleted=0;batchToken++;
+        var partitions={{};{};{};{}};
+        for(i=1;#config.proxy.outbounds){
+            var node=config.proxy.outbounds[i];table.push(batchNodes,node);
+            table.push(partitions[(i-1)%4+1],{slot=i;address=node.address;port=tonumber(node.port)});
+        }
+        if(!#batchNodes) return;
+        batchActive=true;dialog.measureAll.text="停止测速 0/" + #batchNodes;
+        for(i=1;4){
+            if(!#partitions[i]) continue;
+            thread.invoke(function(picker,token,tasks){
+                import wsock.tcp.client;
+                import time;
+                for(j=1;#tasks){
+                    if(!picker.isLatencyBatchActive(token)) return;
+                    var task=tasks[j];
+                    var result="TCP 超时/连接失败";
+                    var client;
+                    try{
+                        var total=0;
+                        var succeeded=true;
+                        for(k=1;2){
+                            client=wsock.tcp.client();
+                            var startedTick=time.tick();
+                            var ok=client.connectTimeout(task.address,task.port,1.5);
+                            total+=time.tick()-startedTick;
+                            client.close();client=null;
+                            if(!ok){ succeeded=false;break; }
+                        }
+                        if(succeeded) result=math.round(total/2) + " 毫秒";
+                    }
+                    catch(e){ if(client) client.close();result="TCP 测速失败"; }
+                    if(!picker.isLatencyBatchActive(token)) return;
+                    picker.onBatchLatency(token,task.slot,result);
+                }
+            },dialog,batchToken,partitions[i]);
+        }
+    }
     dialog.cancel.oncommand=function(){ dialog.close(); }
-    dialog.onClose=function(){ if(nodePicker===dialog) nodePicker=null; }
+    dialog.onClose=function(){ batchActive=false;batchToken++;if(nodePicker===dialog) nodePicker=null; }
     renderRows();dialog.enableDpiScaling();dialog.show();
 }
-winform.testLatency.oncommand = function(){
-    var controller = mainForm.proxyController;
-    if(!controller || controller.btnTcping.disabledText || !#config.proxy.outbounds) return;
-    sysProxy.setMode(preferredMode);
-    controller.btnTcping.oncommand();
+winform.onLatencyMeasured = function(token,text){
+    if(token != latencyRequestToken) return;
+    measuringLatency = false;
+    // Keep the original node in the UI thread; worker arguments are copied.
+    var node = latencyNode;
+    latencyNode = null;
+    for(i=1;#config.proxy.outbounds){
+        if(config.proxy.outbounds[i] === node){
+            mainForm.proxyController.listview.setItemText(text,i,7);
+            break;
+        }
+    }
     winform.refresh();
+}
+winform.testLatency.oncommand = function(){
+    var node = config.proxy.outbounds[selectedHomeIndex];
+    if(!node || measuringLatency) return;
+    measuringLatency = true;
+    latencyNode = node;
+    latencyRequestToken++;
+    winform.refresh();
+    thread.invoke(function(home,token,address,port){
+        import wsock.tcp.client;
+        import time;
+        var total = 0;
+        for(i=1;2;1){
+            var client = wsock.tcp.client();
+            var latencyStartTick = time.tick();
+            var connected = client.connectTimeout(address,port,1.5);
+            total += time.tick() - latencyStartTick;
+            client.close();
+            if(!connected){ home.onLatencyMeasured(token,"TCP 超时/连接失败"); return; }
+        }
+        home.onLatencyMeasured(token,math.round(total / 2) + " 毫秒");
+    },winform,latencyRequestToken,node.address,tonumber(node.port));
 }
 winform.smart.oncommand = function(){
     preferredMode = "pac";

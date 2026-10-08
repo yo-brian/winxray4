@@ -108,7 +108,8 @@ template = function(source){
                         if(!rule.rule_set) rule.rule_set={};..table.push(rule.rule_set,addSet("geosite",..string.right(value,-9)));
                     }
                     else {
-                        var key="domain_keyword",text=value;
+                        var key="domain_keyword";
+                        var text=value;
                         if(..string.startWith(value,"full:")){ key="domain";text=..string.right(value,-6); }
                         elseif(..string.startWith(value,"domain:")){ key="domain_suffix";text=..string.right(value,-8); }
                         elseif(..string.startWith(value,"keyword:")) text=..string.right(value,-9);
