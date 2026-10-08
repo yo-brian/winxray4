@@ -1,0 +1,10 @@
+﻿错误发生在文件---------------:
+H:\code\winxray4\forms\main\home.aardio
+错误信息---------------:
+
+{Error}:
+{Line}:#119
+{File}:H:\code\winxray4\forms\main\home.aardio
+{Error}:
+{Expected}:'<name>'
+{Near}:'begin'

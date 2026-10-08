@@ -165,7 +165,7 @@ restart = function(editor,outbound){
 		
 		import v2ray.core.configJson;
 		var jsonPath,err = ..v2ray.core.configJson.write(
-			..io.joinpath(..io.splitpath(corePath).dir,"config.json")
+			..io.fullpath("/config.json")
 			,outbound,socksProxyPort,httpProxPort);
 	
 		if(!jsonPath){

@@ -1828,7 +1828,7 @@ saveSubscriptionInfo = function(url,header){
     if(!..config.proxy.subscriptionInfo) ..config.proxy.subscriptionInfo = {};
     ..config.proxy.subscriptionInfo[url] = info;
     ..config.proxy.save();
-    var path = ..io.appData("/winXray/subscription-info.json");
+    var path = ..io.fullpath("/subscription-info.json");
     var cache = ..web.json.tryParse(..string.load(path) : "{}") : {};
     cache[url] = info;
     ..string.save(path,..web.json.stringify(cache));

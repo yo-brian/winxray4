@@ -31,6 +31,10 @@
 # Logs and local configurations
 *.log
 /config.json
+/proxy.table
+/core.table
+/ui.table
+/subscription-info.json
 
 # Editor and temporary files
 *.tmp
