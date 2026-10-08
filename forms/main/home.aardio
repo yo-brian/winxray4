@@ -3,7 +3,9 @@ var winform = win.form(text="首页";right=959;bottom=591;bgcolor=16777215);
 winform.add(
     title={cls="static";text="winXray";left=120;top=95;right=820;bottom=143;font=LOGFONT(h=-32);color=3947580;transparent=1;z=1};
     lbNode={cls="static";text="选择节点";left=120;top=178;right=820;bottom=204;font=LOGFONT(h=-15);transparent=1;z=2};
-    nodes={cls="combobox";left=120;top=215;right=820;bottom=250;dr=1;edge=1;items={};mode="dropdown";font=LOGFONT(h=-16);z=3};
+    nodes={cls="combobox";left=120;top=215;right=680;bottom=250;dr=1;edge=1;items={};mode="dropdown";font=LOGFONT(h=-16);z=3};
+    testLatency={cls="plus";text="测延时";left=695;top=215;right=820;bottom=250;dr=1;bgcolor=14935259;font=LOGFONT(h=-15);notify=1;z=10};
+    latency={cls="static";text="TCP 延时：未测速";left=120;top=257;right=820;bottom=282;dr=1;font=LOGFONT(h=-13);transparent=1;z=11};
     smart={cls="radiobutton";text="智能分流模式";left=120;top=290;right=320;bottom=323;font=LOGFONT(h=-17);bgcolor=16777215;z=4};
     global={cls="radiobutton";text="全局模式";left=350;top=290;right=540;bottom=323;font=LOGFONT(h=-17);bgcolor=16777215;z=5};
     start={cls="plus";text="点我启动";left=120;top=365;right=820;bottom=420;dr=1;font=LOGFONT(h=-18);bgcolor=11580047;notify=1;z=6};
@@ -12,11 +14,18 @@ winform.add(
     expiry={cls="static";text="到期时间：订阅未提供";left=120;top=492;right=820;bottom=522;dr=1;font=LOGFONT(h=-15);transparent=1;z=9}
 );
 import config;
+import web.json;
 import v2ray.core;
 import sysProxy;
 import style;
 winform.start.skin(style.primaryButton);
 winform.stop.skin(style.button);
+winform.testLatency.skin(style.button);
+var latencyResults = {};
+var testingLatency = false;
+var nodeKey = function(node){
+    return node ? (node.protocol : "") + ":" + (node.address : "") + ":" + tostring(node.port);
+}
 var selectedNode;
 var preferredMode = config.proxy.mode == "proxy" ? "proxy" : "pac";
 var signature;
@@ -33,7 +42,8 @@ winform.refresh = function(){
     var labels = table.array();
     var selectedIndex;
     for(i,node in config.proxy.outbounds){
-        table.push(labels,(node.ps : node.address : "节点") + "  ·  " + (node.protocol : "") + "  " + (node.address : ""));
+        var measured = latencyResults[nodeKey(node)];
+        table.push(labels,(node.ps : node.address : "节点") + "  ·  " + (node.protocol : "") + "  " + (node.address : "") + (measured ? "  [" + measured + "]" : ""));
         if(node === selectedNode) selectedIndex = i;
     }
     var nextSignature = string.join(labels,"\n");
@@ -55,7 +65,14 @@ winform.refresh = function(){
     winform.start.disabled = !#labels || starting;
     winform.start.text = starting && !connected ? "正在启动…" : "点我启动";
     var node = config.proxy.outbounds[winform.nodes.selIndex];
+    winform.testLatency.disabled = !node || testingLatency;
+    winform.testLatency.text = testingLatency ? "测速中…" : "测延时";
+    winform.latency.text = "TCP 延时：" + (node ? (latencyResults[nodeKey(node)] : "未测速") : "请选择节点");
     var info = node && node.subscribeUrl && config.proxy.subscriptionInfo ? config.proxy.subscriptionInfo[node.subscribeUrl];
+    if(!info && node && node.subscribeUrl){
+        var cache = web.json.tryParse(string.load(io.appData("/winXray/subscription-info.json")) : "{}");
+        if(cache) info = cache[node.subscribeUrl];
+    }
     winform.traffic.text = "剩余流量 / 总流量：订阅未提供";
     winform.expiry.text = "到期时间：订阅未提供";
     if(info){
@@ -73,6 +90,46 @@ winform.nodes.onOk = function(){
     if(refreshing) return;
     selectedNode = config.proxy.outbounds[winform.nodes.selIndex];
     if(selectedNode && v2ray.core.isRunning()) mainForm.proxyController.startNode(winform.nodes.selIndex);
+    winform.refresh();
+}
+winform.onLatencyResult = function(key,result){
+    latencyResults[key] = result;
+    testingLatency = false;
+    winform.refresh();
+}
+winform.testLatency.oncommand = function(){
+    var node = config.proxy.outbounds[winform.nodes.selIndex];
+    if(!node || testingLatency) return;
+    var key = nodeKey(node);
+    if(node.protocol == "tuic" || node.protocol == "hysteria2" || node.protocol == "hy2" || node.protocol == "hysteria"){
+        winform.onLatencyResult(key,"UDP 节点不支持 TCP 测速");
+        return;
+    }
+    testingLatency = true;
+    winform.refresh();
+    thread.invoke(function(form,key,address,port){
+        var result = "连接超时或不可达";
+        var client;
+        try {
+            import wsock.tcp.client;
+            var elapsed = 0;
+            var succeeded = 0;
+            for(i=1;3){
+                client = wsock.tcp.client();
+                var begin = time.tick();
+                if(client.connectTimeout(address,port,3)){
+                    elapsed += time.tick() - begin;
+                    succeeded++;
+                }
+                client.close();
+                client = null;
+            }
+            if(succeeded) result = tostring(math.round(elapsed / succeeded)) + " ms";
+        }
+        catch(e){ result = "测速失败"; }
+        if(client) client.close();
+        form.onLatencyResult(key,result);
+    },winform,key,node.address,tonumber(node.port));
 }
 winform.smart.oncommand = function(){
     preferredMode = "pac";

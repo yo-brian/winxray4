@@ -525,7 +525,7 @@ var removeOutbounds = function(selectedItems){
 	}
 	publish("outbounds.updateConfigJson"); 
 
-	if(activeIndex && (!frmXray.listview.activeOutboundIndex) ){
+	if(!frmXray.userStopped && activeIndex && (!frmXray.listview.activeOutboundIndex) ){
 		if(!v2ray.core.lastDownloadingCoreFailed) frmXray.btnTcping.oncommand();
 	}
 }
@@ -1084,7 +1084,7 @@ subscribe("uiCommand.restartV2RayCore",function(){
 	}
 	frmXray.listview.setTable(outbounds);	 
 	
-	if(!v2ray.core.lastDownloadingCoreFailed) frmXray.btnTcping.oncommand();
+	if(!frmXray.userStopped && !v2ray.core.lastDownloadingCoreFailed) frmXray.btnTcping.oncommand();
 } )
 
 import process;

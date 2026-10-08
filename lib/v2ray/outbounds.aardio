@@ -457,28 +457,54 @@ importFromString = function(str,subscribeUrl){
 		
 		var subscriptionHeader;
 		var responseJson = ..win.invoke(
-			function(subscribeUrl){
-				import inet.http; 
-				import web.json;
-				import web.rest.github;
-				if( string.indexOf(subscribeUrl,"github.com")
-					|| string.indexOf(subscribeUrl,"raw.githubusercontent.com") 
-					){
-					
-					var ret  = web.rest.github.getContent(subscribeUrl)
-					if(ret) return web.json.stringify({body=ret;status=200});
-				}
-
-				import zlib;
-				var http = inet.http("v2rayN/7.0");
-				http.setTimeouts(10000,15000,20000);
-				http.addHeaders = "Accept-Encoding: identity\r\n";
-				var body,downloadError = http.get(subscribeUrl);
-				var header = body ? http.readHeader("Subscription-Userinfo:");
-				var status = http.statusCode;
-				http.close();
-				return web.json.stringify({body=body;header=header;status=status;errorCode=type(downloadError)=="number" ? downloadError : null});
-			},subscribeUrl 
+            function(subscribeUrl){
+                import web.json;
+                var result = {};
+                var stage = "初始化";
+                var http;
+                try {
+                    stage = "加载 HTTP 库";
+                    import inet.http;
+                    import win;
+                    if(string.indexOf(subscribeUrl,"github.com") || string.indexOf(subscribeUrl,"raw.githubusercontent.com")){
+                        stage = "下载 GitHub 订阅";
+                        import web.rest.github;
+                        result.body = web.rest.github.getContent(subscribeUrl);
+                        if(result.body) result.status = 200;
+                    }
+                    if(!result.body){
+                        stage = "创建 HTTP 会话";
+                        http = inet.http("v2rayN/7.0");
+                        http.afterSend = function(){
+                            result.header = http.readHeader("Subscription-Userinfo");
+                            http.readHeader();
+                        };
+                        http.setTimeouts(10000,15000,20000);
+                        http.addHeaders = "Accept-Encoding: identity\r\n";
+                        stage = "下载订阅内容";
+                        var body,downloadError = http.get(subscribeUrl);
+                        result.body = body;
+                        result.status = http.statusCode;
+                        if(type(downloadError)=="number") result.errorCode = downloadError;
+                        stage = "读取订阅信息";
+                        if(body){
+                            for line in string.lines(http.responseHeaders : ""){
+                                var colon = string.indexOf(line,":");
+                                if(colon && string.lower(string.trim(string.left(line,colon-1))) == "subscription-userinfo"){
+                                    result.header = string.trim(string.slice(line,colon+1));
+                                }
+                            }
+                        }
+                    }
+                }
+                catch(e){
+                    // Redact the subscription URL from exception text before returning it.
+                    result.exception = string.replace(tostring(e),"@" + subscribeUrl,"[订阅地址]");
+                    result.stage = stage;
+                }
+                if(http) http.close();
+                return web.json.stringify(result);
+            },subscribeUrl
 		)
 	
 		form.close();
@@ -487,11 +513,12 @@ importFromString = function(str,subscribeUrl){
 		subscriptionHeader = response ? response.header;
 		if(!response || response.status != 200 || !#str){
 			var detail = !response ? "下载线程未返回有效结果" : (response.status ? "HTTP " + tostring(response.status) : "网络请求失败");
+			if(response && response.exception) detail = response.stage + "：" + response.exception;
 			if(response && response.errorCode) detail += "，错误码 " + tostring(response.errorCode);
 			..mainForm.msgErr("订阅下载失败（" + detail + "），原有节点已保留");
 			return;
 		}
-		if(subscriptionHeader) ..publish("subscription.info",subscribeUrl,subscriptionHeader);
+		if(subscriptionHeader) saveSubscriptionInfo(subscribeUrl,subscriptionHeader);
 		if(!str){
 			return;
 		}
@@ -542,7 +569,7 @@ importFromString = function(str,subscribeUrl){
         var decoded = ..crypt.decodeBin(cleanStr,,1/*_CRYPT_STRING_BASE64*/);
         if(decoded && #decoded) str = decoded;
     }
-    if(subscribeUrl && (..string.find(str,"<!DOCTYPE") || ..string.find(str,"<html"))){
+    if(subscribeUrl && (..string.indexOf(..string.lower(str),"<!doctype") || ..string.indexOf(..string.lower(str),"<html"))){
         ..mainForm.msgErr("订阅返回了网页而不是节点数据，原有节点已保留");
         return;
     }
@@ -1791,16 +1818,22 @@ validOutbound = function(outbound){
 	}
 }
 
-..subscribe("subscription.info",function(url,header){
+saveSubscriptionInfo = function(url,header){
     var info = {};
-    for(key,value in ..string.gmatch(..string.lower(header),"([a-z]+)\s*=\s*(\d+)")){
-        if(key == "upload" || key == "download" || key == "total" || key == "expire") info[key] = tonumber(value);
+    for(i,key in {"upload";"download";"total";"expire"}){
+        var value = ..string.match(..string.lower(header),key + "\s*=\s*(\d+)");
+        if(value) info[key] = tonumber(value);
     }
     if(!..table.count(info)) return;
     if(!..config.proxy.subscriptionInfo) ..config.proxy.subscriptionInfo = {};
     ..config.proxy.subscriptionInfo[url] = info;
     ..config.proxy.save();
-});
+    var path = ..io.appData("/winXray/subscription-info.json");
+    var cache = ..web.json.tryParse(..string.load(path) : "{}") : {};
+    cache[url] = info;
+    ..string.save(path,..web.json.stringify(cache));
+}
+..subscribe("subscription.info",saveSubscriptionInfo);
 
 updateSubscription = function(outbondSubscribeUrlMap){
 	
@@ -1882,6 +1915,7 @@ autoUpdateSubscription = function(){
 			import web.rest.github;
 			
 			var http = inet.http();
+			http.afterSend = lambda() http.readHeader();
 			for(url,v in outbondSubscribeUrlMap){ 
 				
 				if( string.indexOf(url,"github.com")
@@ -1892,7 +1926,11 @@ autoUpdateSubscription = function(){
 				else{
 					outbondSubscribeUrlMap[url] = http.get(url);
 					if(outbondSubscribeUrlMap[url]){
-						var header = http.readHeader("Subscription-Userinfo:");
+						var header;
+						for line in string.lines(http.responseHeaders : ""){
+							var colon = string.indexOf(line,":");
+							if(colon && string.lower(string.trim(string.left(line,colon-1))) == "subscription-userinfo") header = string.trim(string.slice(line,colon+1));
+						}
 						if(header) winform.publish("subscription.info",url,header);
 					}
 				}
