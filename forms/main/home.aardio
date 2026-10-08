@@ -3,7 +3,7 @@ var winform = win.form(text="首页";right=959;bottom=591;bgcolor=16777215);
 winform.add(
     title={cls="static";text="winXray";left=120;top=95;right=820;bottom=143;font=LOGFONT(h=-32);color=3947580;transparent=1;z=1};
     lbNode={cls="static";text="选择节点";left=120;top=178;right=820;bottom=204;font=LOGFONT(h=-15);transparent=1;z=2};
-    nodes={cls="combobox";left=120;top=215;right=650;bottom=250;dr=1;edge=1;items={};mode="dropdown";font=LOGFONT(h=-16);z=3};
+    nodes={cls="plus";text="点击选择节点";left=120;top=215;right=650;bottom=250;dr=1;align="left";bgcolor=16777215;border={color=13816530;radius=4};textPadding={left=12;right=12};notify=1;font=LOGFONT(h=-15);z=3};
     testLatency={cls="plus";text="测延时";left=665;top=215;right=820;bottom=250;dr=1;bgcolor=14935259;font=LOGFONT(h=-15);notify=1;z=10};
     latency={cls="static";text="TCP 延时：未测速";left=120;top=257;right=820;bottom=282;dr=1;font=LOGFONT(h=-13);transparent=1;z=11};
     smart={cls="radiobutton";text="智能分流模式";left=120;top=290;right=320;bottom=323;font=LOGFONT(h=-17);bgcolor=16777215;z=4};
@@ -21,11 +21,29 @@ import style;
 winform.start.skin(style.primaryButton);
 winform.stop.skin(style.button);
 winform.testLatency.skin(style.button);
+winform.nodes.skin(style.button);
 var selectedNode;
+var selectedHomeIndex = 0;
+var nodePicker;
 var preferredMode = config.proxy.mode == "proxy" ? "proxy" : "pac";
 var signature;
 var refreshing = false;
 var connected = false;
+var updateControl = function(control,property,value){
+    if(control[property] !== value) control[property] = value;
+}
+var rememberNode = function(node){
+    if(!node) return;
+    var saved = {protocol=node.protocol;address=node.address;port=tonumber(node.port);ps=node.ps;subscribeUrl=node.subscribeUrl};
+    if(web.json.stringify(saved) != web.json.stringify(config.proxy.homeSelectedNode)){
+        config.proxy.homeSelectedNode = saved;
+        config.proxy.save();
+    }
+}
+var matchesSavedNode = function(node,saved){
+    return saved && node.protocol == saved.protocol && node.address == saved.address
+        && tonumber(node.port) == tonumber(saved.port) && node.subscribeUrl == saved.subscribeUrl;
+}
 var formatBytes = function(bytes){
     var units = {"B";"KB";"MB";"GB";"TB"};
     var index = 1;
@@ -36,58 +54,140 @@ var formatBytes = function(bytes){
 winform.refresh = function(){
     var labels = table.array();
     var selectedIndex;
+    var rememberedIndex,endpointIndex;
+    var saved = config.proxy.homeSelectedNode;
     for(i=1;#config.proxy.outbounds){
         var node = config.proxy.outbounds[i];
         var measured = mainForm.proxyController.listview.getItemText(i,7);
         table.push(labels,(node.ps : node.address : "节点") + "  ·  " + (node.protocol : "") + "  " + (node.address : "") + (measured ? "  [" + measured + "]" : ""));
         if(node === selectedNode) selectedIndex = i;
+        if(matchesSavedNode(node,saved)){
+            if(!endpointIndex) endpointIndex = i;
+            if(node.ps == saved.ps && !rememberedIndex) rememberedIndex = i;
+        }
     }
     var nextSignature = string.join(labels,"\n");
-    if(nextSignature != signature){
+    if(nextSignature != signature || selectedNode !== config.proxy.outbounds[selectedHomeIndex]){
         refreshing = true;
-        winform.nodes.items = labels;
         var controller = mainForm.proxyController;
-        winform.nodes.selIndex = selectedIndex : (controller ? controller.listview.activeOutboundIndex) : (#labels ? 1 : 0);
-        selectedNode = config.proxy.outbounds[winform.nodes.selIndex];
+        var nextIndex = selectedIndex : rememberedIndex : endpointIndex : (controller ? controller.listview.activeOutboundIndex) : (#labels ? 1 : 0);
+        selectedHomeIndex = nextIndex;
+        selectedNode = config.proxy.outbounds[selectedHomeIndex];
         refreshing = false;
         signature = nextSignature;
     }
-    winform.smart.checked = preferredMode == "pac";
-    winform.global.checked = preferredMode == "proxy";
+    updateControl(winform.smart,"checked",preferredMode == "pac");
+    updateControl(winform.global,"checked",preferredMode == "proxy");
     var controller = mainForm.proxyController;
     var starting = controller && (controller.autoTesting || controller.btnTcping.disabledText);
-    winform.start.hide = connected;
-    winform.stop.hide = !connected;
-    winform.start.disabled = !#labels || starting;
-    winform.start.text = starting && !connected ? "正在启动…" : "点我启动";
-    var node = config.proxy.outbounds[winform.nodes.selIndex];
-    winform.testLatency.disabled = !node || starting;
-    winform.testLatency.text = starting ? "测速连接中…" : "测延时并连接";
-    var speed = node ? controller.listview.getItemText(winform.nodes.selIndex,7);
-    winform.latency.text = "TCP 延时：" + (#speed ? speed : "未测速");
+    updateControl(winform.start,"hide",connected);
+    updateControl(winform.stop,"hide",!connected);
+    updateControl(winform.start,"disabled",(!#labels || starting) ? true : false);
+    updateControl(winform.start,"text",starting && !connected ? "正在启动…" : "点我启动");
+    var node = config.proxy.outbounds[selectedHomeIndex];
+    updateControl(winform.nodes,"text",node ? (node.ps : node.address) + "  ·  " + (node.protocol : "") + "   ▾" : "点击选择节点");
+    updateControl(winform.nodes,"disabled",starting ? true : false);
+    updateControl(winform.testLatency,"disabled",(!node || starting) ? true : false);
+    updateControl(winform.testLatency,"text",starting ? "测速连接中…" : "测延时并连接");
+    var speed = node ? controller.listview.getItemText(selectedHomeIndex,7);
+    updateControl(winform.latency,"text","TCP 延时：" + (#speed ? speed : "未测速"));
     var info = node && node.subscribeUrl && config.proxy.subscriptionInfo ? config.proxy.subscriptionInfo[node.subscribeUrl];
     if(!info && node && node.subscribeUrl){
         var cache = web.json.tryParse(string.load(io.fullpath("/subscription-info.json")) : "{}");
         if(cache) info = cache[node.subscribeUrl];
     }
-    winform.traffic.text = "剩余流量 / 总流量：订阅未提供";
-    winform.expiry.text = "到期时间：订阅未提供";
+    var trafficText = "剩余流量 / 总流量：订阅未提供";
+    var expiryText = "到期时间：订阅未提供";
     if(info){
         if(info.total !== null && info.upload !== null && info.download !== null){
             var remaining = info.total - info.upload - info.download;
             if(remaining < 0) remaining = 0;
-            winform.traffic.text = "剩余流量 / 总流量：" + formatBytes(remaining) + " / " + formatBytes(info.total);
+            trafficText = "剩余流量 / 总流量：" + formatBytes(remaining) + " / " + formatBytes(info.total);
         }
-        if(info.expire) winform.expiry.text = "到期时间：" + tostring(time(info.expire));
-        elseif(info.expire === 0) winform.expiry.text = "到期时间：长期有效";
+        if(info.expire) expiryText = "到期时间：" + tostring(time(info.expire));
+        elseif(info.expire === 0) expiryText = "到期时间：长期有效";
     }
+    updateControl(winform.traffic,"text",trafficText);
+    updateControl(winform.expiry,"text",expiryText);
 }
 
-winform.nodes.onOk = function(){
+var selectHomeNode = function(index){
     if(refreshing) return;
-    selectedNode = config.proxy.outbounds[winform.nodes.selIndex];
-    if(selectedNode && v2ray.core.isRunning()) mainForm.proxyController.startNode(winform.nodes.selIndex);
+    if(!config.proxy.outbounds[index]) return;
+    selectedHomeIndex = index;
+    selectedNode = config.proxy.outbounds[selectedHomeIndex];
+    rememberNode(selectedNode);
+    mainForm.proxyController.listview.selIndex=index;
+    mainForm.proxyController.listview.ensureVisible(index);
+    if(selectedNode && v2ray.core.isRunning()) mainForm.proxyController.startNode(selectedHomeIndex);
     winform.refresh();
+}
+winform.nodes.oncommand = function(){
+    if(nodePicker && win.isWindow(nodePicker.hwnd)){ nodePicker.show(); return; }
+    var dialog = win.form(text="选择节点";right=760;bottom=470;border="dialog frame";max=false;parent=mainForm);
+    nodePicker = dialog;
+    dialog.add(
+        search={cls="edit";left=18;top=18;right=510;bottom=48;edge=1;z=1};
+        group={cls="combobox";left=525;top=18;right=742;bottom=48;mode="dropdown";edge=1;z=2};
+        rows={cls="listview";left=18;top=62;right=742;bottom=397;edge=1;fullRow=1;gridLines=1;z=3};
+        hint={cls="static";text="搜索名称、地址或协议；双击节点即可选择";left=18;top=417;right=545;bottom=445;transparent=1;z=4};
+        choose={cls="button";text="选择节点";left=552;top=412;right=652;bottom=447;z=5};
+        cancel={cls="button";text="取消";left=662;top=412;right=742;bottom=447;z=6}
+    );
+    dialog.search.setCueBannerText("搜索节点名称、地址或协议");
+    dialog.rows.insertColumn("节点",245);
+    dialog.rows.insertColumn("订阅分组",145);
+    dialog.rows.insertColumn("协议",90);
+    dialog.rows.insertColumn("延时",95);
+    dialog.rows.insertColumn("状态",110);
+    var groups={"全部订阅"},groupUrls={"*"},groupNames={};
+    for(i=1;#config.proxy.outbounds){
+        var node=config.proxy.outbounds[i];
+        var url=node.subscribeUrl : "";
+        if(!groupNames[url]){
+            var name=url=="" ? "手动导入" : "订阅 " + #groups;
+            for(j=1;#config.proxy.subscribeUrls){
+                var sub=config.proxy.subscribeUrls[j];
+                if(sub.url==url && #sub.ps) name=sub.ps;
+            }
+            groupNames[url]=name;table.push(groups,name);table.push(groupUrls,url);
+        }
+    }
+    dialog.group.items=groups;dialog.group.selIndex=1;
+    var displayed={};
+    var renderRows=function(){
+        var query=string.lower(string.trim(dialog.search.text));
+        var group=groupUrls[dialog.group.selIndex] : "*";
+        dialog.rows.clear();displayed={};
+        for(i=1;#config.proxy.outbounds){
+            var node=config.proxy.outbounds[i];
+            var name=node.ps : node.address : "节点";
+            var url=node.subscribeUrl : "";
+            var searchable=string.lower(name + " " + (node.address : "") + " " + (node.protocol : ""));
+            if((group=="*" || group==url) && (!#query || string.indexOf(searchable,query))){
+                table.push(displayed,node);
+                var status=i==selectedHomeIndex ? "当前选择" : "";
+                dialog.rows.addItem({name;groupNames[url] : "订阅";node.protocol : "";mainForm.proxyController.listview.getItemText(i,7) : "未测速";status});
+                if(i==selectedHomeIndex){ dialog.rows.setSelected(#displayed,true);dialog.rows.ensureVisible(#displayed); }
+            }
+        }
+        dialog.choose.disabled=!#displayed;
+        if(!#displayed) dialog.hint.text="没有匹配的节点，请调整搜索或分组。";
+        else dialog.hint.text="找到 " + #displayed + " 个节点；双击节点即可选择";
+    }
+    dialog.search.oncommand=function(id,event){ if(event==0x300/*_EN_CHANGE*/) renderRows(); }
+    dialog.group.onOk=renderRows;
+    dialog.choose.oncommand=function(){
+        var node=displayed[dialog.rows.selIndex];if(!node) return;
+        var index;
+        for(i=1;#config.proxy.outbounds){ if(config.proxy.outbounds[i]===node) index=i; }
+        if(!index){ renderRows();return; }
+        dialog.close();selectHomeNode(index);
+    }
+    dialog.rows.onnotify=function(id,code){ if(code==-3/*_NM_DBLCLK*/) dialog.choose.oncommand(); }
+    dialog.cancel.oncommand=function(){ dialog.close(); }
+    dialog.onClose=function(){ if(nodePicker===dialog) nodePicker=null; }
+    renderRows();dialog.enableDpiScaling();dialog.show();
 }
 winform.testLatency.oncommand = function(){
     var controller = mainForm.proxyController;
@@ -107,8 +207,9 @@ winform.global.oncommand = function(){
     winform.refresh();
 }
 winform.start.oncommand = function(){
-    var index = winform.nodes.selIndex;
+    var index = selectedHomeIndex;
     if(!config.proxy.outbounds[index]) return;
+    rememberNode(config.proxy.outbounds[index]);
     sysProxy.setMode(preferredMode);
     mainForm.proxyController.startNode(index);
     winform.refresh();
@@ -126,8 +227,9 @@ subscribe("activeOutbound",function(address){
     if(connected){
         var index = mainForm.proxyController.listview.activeOutboundIndex;
         if(index){
-            winform.nodes.selIndex = index;
+            selectedHomeIndex = index;
             selectedNode = config.proxy.outbounds[index];
+            rememberNode(selectedNode);
         }
     }
     winform.refresh();

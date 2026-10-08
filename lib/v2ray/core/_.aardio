@@ -1,2 +1,130 @@
-// Compatibility namespace; sing-box is the only runtime core.
-import v2ray.core.singBox;
+// Single-core lifecycle. Namespace retained for existing UI/subscription callers.
+import config;
+import process.popen;
+import process.job.limitKill;
+import wsock.tcp.server;
+import v2ray.core.singBoxJson;
+import time;
+namespace v2ray.core;
+import sysProxy;
+
+socksProxyPort=null;httpProxPort=null;
+var coreProcess,starting;
+var proxyInbounds=function(){
+    var socks,http;
+    for(i,ib in ..config.core.default.inbounds){
+        if(ib.tag=="proxy") socks=ib;
+        elseif(ib.tag=="http_proxy") http=ib;
+    }
+    return socks,http;
+}
+getSystemProxyConfig=function(){
+    if(!(socksProxyPort && httpProxPort)) return;
+    return ..config.proxy.useHttpGlobal ? "127.0.0.1:" + httpProxPort : "SOCKS=127.0.0.1:" + socksProxyPort;
+}
+isInboundPortChanged=function(){
+    var socks,http=proxyInbounds();
+    if(!socks || !http) return true;
+    return (socks.listen_port : socks.port)!=socksProxyPort || (http.listen_port : http.port)!=httpProxPort;
+}
+getPath=function(hwnd,unused,allowDownload){
+    for(i,path in {..io.fullpath("/sing-box/sing-box.exe");..io.fullpath("/sing-box.exe");..io.appData("/winXray/sing-box/sing-box.exe")}){
+        if(..io.exist(path)) return path;
+    }
+    return null;
+}
+getCoreDir=function(){
+    var path=getPath();
+    return path ? ..io.splitpath(path).dir : ..io.fullpath("/sing-box/");
+}
+isRunning=function(){ return coreProcess && coreProcess.process && coreProcess.process.stillActive(); }
+stop=function(){
+    var tick=..time.tick();
+    ..sysProxy.reset(false);
+    if(coreProcess){ coreProcess.terminate();coreProcess=null; }
+    ..publish("uiCommand.print","停止 sing-box 耗时：" + (..time.tick()-tick) + " 毫秒");
+    ..publish("v2RayCore.stopped");
+}
+restart=function(editor,node){
+    if(starting) return false,"正在启动 sing-box，请稍候。";
+    if(!node) return false,"未选择节点。";
+    var path=getPath();
+    if(!path) return false,"未找到 sing-box.exe，请放到程序目录的 sing-box 文件夹。";
+    starting=true;
+    var tick=..time.tick();
+    var inbounds=..config.core.default.inbounds;
+    var socks,http=proxyInbounds();
+    if(!socks || !http){ starting=false;return false,"配置缺少 SOCKS/HTTP 入站。"; }
+    socksProxyPort=socks.listen_port : socks.port;
+    httpProxPort=http.listen_port : http.port;
+    if(!socksProxyPort || socksProxyPort>=49152) socksProxyPort=..wsock.tcp.server.getFreePort("127.0.0.1",1080,10801,10811);
+    if(!httpProxPort || httpProxPort>=49152) httpProxPort=..wsock.tcp.server.getFreePort("127.0.0.1",1082,10802,10812);
+    // Validate the next configuration before interrupting a working connection.
+    var jsonPath,err=..v2ray.core.singBoxJson.write(..io.fullpath("/sing-box-config.json"),node,socksProxyPort,httpProxPort);
+    if(!jsonPath){ starting=false;return false,err; }
+    var checker,err=..process.popen(path,{"check";"-c";jsonPath});
+    if(!checker){ starting=false;return false,err; }
+    var done,out,stderr,exitCode=checker.waitOne(10000);
+    if(done) checker.close();else checker.terminate();
+    if(!done || exitCode!=0){
+        ..publish("uiCommand.print",out : stderr : "sing-box 配置校验超时。");
+        starting=false;return false,"sing-box 配置校验失败，详情见日志。";
+    }
+    ..publish("uiCommand.print","生成及校验配置耗时：" + (..time.tick()-tick) + " 毫秒");
+    ..publish("activeOutbound",false);
+    ..sysProxy.reset(false);
+    if(coreProcess){ coreProcess.terminate();coreProcess=null; }
+    coreProcess,err=..process.popen(path,{"run";"-c";jsonPath});
+    if(!coreProcess){ starting=false;return false,err; }
+    var exited,out,stderr=coreProcess.waitOne(500);
+    if(exited){
+        ..publish("uiCommand.print",out : stderr : "sing-box 启动后退出。");
+        coreProcess.close();coreProcess=null;starting=false;
+        return false,"sing-box 启动失败，详情见日志。";
+    }
+    coreProcess.assignToJobObject(..process.job.limitKill);
+    coreProcess.codepage=65001;
+    var running=coreProcess;
+    coreProcess.onResponseEnd=function(){
+        if(coreProcess!=running) return;
+        coreProcess=null;running.close();
+        ..sysProxy.reset(false);
+        ..publish("activeOutbound",false);
+        ..publish("v2RayCore.stopped");
+        ..publish("uiCommand.print","sing-box 已退出，系统代理已关闭。");
+    }
+    coreProcess.logResponse(editor,100);
+    for(i,ib in inbounds){
+        var port=ib.tag=="proxy" ? socksProxyPort : (ib.tag=="http_proxy" ? httpProxPort : null);
+        if(port){ if(ib.type) ib.listen_port=port;else ib.port=port; }
+    }
+    ..config.core.save();starting=false;
+    ..publish("uiCommand.print","已启动 sing-box，SOCKS：" + socksProxyPort + "，HTTP：" + httpProxPort);
+    ..publish("v2RayCore.restarted",socksProxyPort,httpProxPort);
+    return true;
+}
+
+updateCore=function(){
+    import inet.http;
+    import web.json;
+    import zlib.httpFile;
+    import fsys;
+    var http=..inet.http();
+    var data=http.get("https://api.github.com/repos/SagerNet/sing-box/releases/latest");http.close();
+    var release=..web.json.parse(data : "");
+    if(!release){ ..publish("uiCommand.print","获取 sing-box 版本失败。");return; }
+    var arch=..process().isWow64() ? "amd64" : "386";
+    var asset;
+    for(i,item in release.assets){ if(..string.endsWith(item.name,"windows-" + arch + ".zip")) asset=item; }
+    if(!asset){ ..publish("uiCommand.print","未找到适合本机的 sing-box 安装包。");return; }
+    var temp=..io.appData("/winXray/temp/sing-box-" + release.tag_name + "/");
+    if(!..zlib.httpFile.download(asset.browser_download_url,"下载 sing-box " + release.tag_name,..io.appData("/winXray/download/"),temp,,..mainForm.hwnd)) return;
+    var downloaded;
+    ..fsys.enum(temp,"*.exe",function(dir,name,path){
+        if(name=="sing-box.exe") downloaded=path;
+    },true);
+    if(!downloaded){ ..publish("uiCommand.print","安装包中未找到 sing-box.exe。");return; }
+    var dir=getCoreDir();..io.createDir(dir);stop();
+    if(!..fsys.copy(downloaded,..io.joinpath(dir,"sing-box.exe"))) return;
+    return release.tag_name;
+}

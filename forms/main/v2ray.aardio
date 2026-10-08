@@ -38,9 +38,8 @@ frmXray.isStartCancelled = function(token){
     return frmXray.userStopped || token != activeOutboundToken;
 }
 
-var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTesting,skipProbe){
+var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTesting){
 	frmXray.userStopped = false;
-	frmXray.manualUnchecked = skipProbe === true;
 	activeOutboundToken++;
 	var currentToken = activeOutboundToken;
 	
@@ -72,10 +71,6 @@ var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTes
 
 	if( startTesting  ){
 		currentOutboundIndex,currentOutboundAddress = outboundIndex,outboundAddress;
-		if(skipProbe){
-			frmXray.onStartXrayComplete(outboundIndex,false,outboundAddress,currentToken,true);
-			return true;
-		}
 		frmXray.autoTesting = true;
 		
 		..thread.invoke( 
@@ -179,7 +174,7 @@ frmXray.autoUpdateSubscription = function(timeout){
 		}
 } 
 
-frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddress,token,unchecked){
+frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddress,token){
 	if(frmXray.userStopped || (token && token != activeOutboundToken)){
 		return;
 	}
@@ -197,11 +192,11 @@ frmXray.onStartXrayComplete = function(outboundIndex,timerTesting,outboundAddres
 	}
 	
 	frmXray.autoTesting = false;
-	listview.setItemText(unchecked ? "内核已启动：未检测" : "活动服务器：正常",outboundIndex,8);
+	listview.setItemText("活动服务器：正常",outboundIndex,8);
 	listview.activeOutboundIndex = outboundIndex;
 
 	var address  = listview.getItemText(outboundIndex,2);
-	if(!timerTesting) frmXray.edit.print(unchecked ? "内核已启动（未检测连通性）：" : "已切换到服务器：",address);
+	if(!timerTesting) frmXray.edit.print("已切换到服务器：",address);
 	listview.activeOutboundAddress = address;
 
 	if(listview.getItemText(outboundIndex,7)=="不可用"){
@@ -1298,7 +1293,6 @@ frmXray.chkAutoTest.oncommand = function(id,event){
 	import inet.http;
 	testTimerId = frmXray.setInterval( 
 		config.proxy.testInterval*1000,function(){
-			if(frmXray.manualUnchecked) return config.proxy.testInterval*1000;
 			if(frmXray.btnTcping.disabled) return;
 			if( frmXray.autoTesting ) return; 
 
@@ -1342,7 +1336,7 @@ frmXray.startNode = function(index){
     var node = config.proxy.outbounds[index];
     if(!node) return false;
     frmXray.listview.setSelected(index,true);
-    return activeOutbound(index,node.address,false,false,true);
+    return activeOutbound(index,node.address,false);
 }
 frmXray.stopNode = function(){
     if(v2ray.core.isRunning() || frmXray.autoTesting || frmXray.btnTcping.disabledText || frmXray.listview.activeOutboundIndex !== null){
